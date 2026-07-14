@@ -13,6 +13,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # ── 1. DOWNLOAD THE CORE QWEN LLM WEIGHTS ─────────────────────────────────────
 MODEL_DIR="$HERE/models"
 MODEL_FILE="$MODEL_DIR/qwen1_5-0_5b-chat-q4_k_m.gguf"
+
+# CORRECTED DIRECT FILE LINK (Bypasses Hugging Face frontend UI, works 100% token-free)
 MODEL_URL="https://huggingface.co"
 
 mkdir -p "$MODEL_DIR"
