@@ -1,0 +1,8 @@
+streamlit==1.32.0
+llama-cpp-python==0.2.56
+sentence-transformers==2.5.1
+sounddevice==0.4.6
+soundfile==0.12.1
+numpy==1.26.4
+matplotlib==3.8.3
+huggingface_hub==0.21.4
