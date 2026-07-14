@@ -1,37 +1,37 @@
 {
-  "team_id": "your-team-id",
-  "domain": "coding_assistants",
-  "language_scope": ["en"],
+  "team_id": "gatsby100m",
+  "domain": "agriculture",
+  "language_scope": ["en", "ha"],
   "african_alpha_claim": false,
   "budget_laptop_claim": true,
   "submitter": {
-    "name": "your-name",
-    "email": "your-email@domain.com",
-    "github_handle": "your-github"
+    "name": "Ben-gabi Ritou Joshua",
+    "email": "gritoujoshua66@gmail.com",
+    "github_handle": "gatsby100m"
   },
   "cross_disciplinary_pairing": {
     "discipline": "education",
     "load_bearing": true,
-    "description": "Brief description of how your model serves a real-world domain."
+    "description": "An offline agricultural expert tool designed to teach young agronomy students and smallholder farmers sustainable crop protection protocols and localized multilingual ledger bookkeeping without internet."
   },
   "test_prompts": [
     {
       "prompt_id": "tp_001",
-      "prompt": "Write a Python function that reads a CSV file and returns the column with the highest mean value."
+      "prompt": "What is the recommended fertilizer schedule for maize, and which specific types should I apply at each stage?"
     },
     {
       "prompt_id": "tp_002",
-      "prompt": "Explain the difference between a list and a tuple in Python, and give one example where each is the better choice."
+      "prompt": "Kwatanta alamomin cutar taba ganyen masara (CMD) kuma wane mataki ya kamata a dauka idan ta fito?"
     }
   ],
   "model": {
-    "name": "SmolLM2-135M-Instruct-Q4_K_M",
+    "name": "qwen1_5-0_5b-chat-q4_k_m",
     "runtime": "llama.cpp",
     "quantization": "GGUF Q4_K_M",
-    "parameters_estimate": "135M",
+    "parameters_estimate": "500M",
     "packaging": "binary_bundle"
   },
   "_runtime": {
-    "model_path": "model/SmolLM2-135M-Instruct-Q4_K_M.gguf"
+    "model_path": "models/qwen1_5-0_5b-chat-q4_k_m.gguf"
   }
 }
