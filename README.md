@@ -1,3 +1,12 @@
+# 🌾 Smart Farm Assistant: Offline Deep-Tech AI
+### ADTC 2026 Submission Template Fork (`gatsby100m`)
+
+An end-to-end, **100% offline, on-device AI assistant** designed explicitly for resource-constrained environments in Africa. Built for the Africa Deep Tech Challenge (ADTC) 2026, this application runs entirely on a laptop CPU without internet dependencies, cloud APIs, or data bundles. 
+
+By combining an ultra-lightweight **0.5B Parameter Qwen1.5 LLM** with an on-device semantic search engine, it provides critical agricultural triage, automated financial tracking, and cultural connection features—fully accessible in both **English and Hausa**.
+
+---
+
 ## 🚀 How to Run the App (One-Click Setup)
 
 This project is fully automated and optimized to build correctly on local development machines, including low-RAM hardware down to 4GB.
@@ -14,14 +23,6 @@ This project is fully automated and optimized to build correctly on local develo
    ./run_mac_linux.sh
    ```
 
-# adtc-laptop-llm
-Offline llm challenge
-# 🌾 Smart Farm Assistant: Offline Deep-Tech AI
-
-An end-to-end, **100% offline, on-device AI assistant** designed explicitly for resource-constrained environments in Africa. Built for the Africa Deep Tech Challenge (ADTC), this application runs entirely on a laptop CPU without internet dependencies, cloud APIs, or data bundles. 
-
-By combining an ultra-lightweight **0.5B Parameter LLM** with an on-device **Whisper Speech-to-Text engine**, it provides critical agricultural triage, automated financial tracking, and cultural connection features—fully accessible via voice or text in both **English and Hausa**.
-
 ---
 
 ## 🚀 Key Features
@@ -32,10 +33,8 @@ By combining an ultra-lightweight **0.5B Parameter LLM** with an on-device **Whi
 * **Auto-Model Provisioning**: Automatically checks local storage on first boot and downloads required model weights from Hugging Face if missing.
 * **Zero Storage Bloat**: Built-in runtime cleanup routines purge temp files to maintain a permanent installation footprint under 450 MB.
 
-### 🎙️ 2. Voice & Accessibility Core
-* **Voice-First Input**: Allows non-literate farmers to dictate questions or logging updates naturally.
-* **Local Speech Transcription**: Uses an optimized Whisper-Tiny engine to transcribe English/Hausa audio on standard laptop CPUs.
-* **Data Privacy & Clean Disks**: Instantly deletes temporary recorded audio samples post-transcription to prevent drive bloat.
+### 🎙️ 2. Accessibility Core
+* **Multilingual Input**: Handles crop descriptions and tracking updates natively in English and Hausa.
 * **Native Read Aloud (TTS)**: Reads farming answers back to the user utilizing the host machine's native system text-to-speech engine.
 
 ### 🤖 3. AI Triage & Advisory Core
@@ -50,9 +49,9 @@ By combining an ultra-lightweight **0.5B Parameter LLM** with an on-device **Whi
 * **Harvest Prediction Windows**: Calculates explicit calendar ranges indicating optimal harvesting periods.
 
 ### 💰 5. Farm Economics & Visual Analytics
-* **Voice-to-Ledger Accounting**: Automatically extracts transaction categories, items, and currencies from spoken farm logs.
+* **Transaction Accounting**: Automatically extracts transaction categories, items, and currencies from your farm logs.
 * **Local Profit Margin Calculators**: Maintains an isolated financial spreadsheet calculating Net Revenue vs Expenses locally.
-* **Accessible Visual Dashboards**: Renders intuitive offline charts with strong color coding and shapes for easy reading by non-literate users.
+* **Accessible Visual Dashboards**: Renders intuitive offline charts with strong color coding and shapes for easy reading.
 * **Local Desktop Exports**: Features single-button exports generating clean text reports of calendars and ledgers straight to the laptop desktop.
 
 ### 🌍 6. Cultural Connection Features
@@ -64,18 +63,20 @@ By combining an ultra-lightweight **0.5B Parameter LLM** with an on-device **Whi
 
 ## 📁 Directory Layout
 
-Your project repository should follow this exact structural format:
+Your project repository follows this structural format:
 
 ```text
 ├── models/
-│   └── .gitkeep             # Placeholder to ensure folder tracking on GitHub
+│   └── qwen1_5-0_5b-chat-q4_k_m.gguf  # Localized LLM Weights
 ├── knowledge/
-│   ├── maize_guide.txt      # Local agricultural text for RAG grounding
-│   └── cassava_guide.txt    # Local agricultural text for RAG grounding
-├── app.py                   # Main python execution application file
-├── .gitignore               # System ignore files configuration
-├── requirements.txt         # Minimalist Python package dependencies
-└── README.md                # Project documentation file
+│   ├── maize_guide.txt                # Local agricultural text for RAG grounding
+│   └── cassava_guide.txt              # Local agricultural text for RAG grounding
+├── app.py                             # Main python execution application file
+├── metadata.json                      # Challenge Validation Configuration
+├── REPORT.md                          # Technical Engineering Report
+├── download_model.sh                  # Idempotent Model Provisioning Script
+├── requirements.txt                   # Minimalist Python package dependencies
+└── README.md                          # Project documentation file
 ```
 
 ---
@@ -85,7 +86,7 @@ Your project repository should follow this exact structural format:
 To fulfill the strict hackathon constraints of low memory execution and a sub-450MB storage footprint, this application adopts a deep-tech architectural design avoiding heavy ML frameworks (like heavy PyTorch or Transformers):
 
 1. **Model Quantization**: The 0.5B LLM is compressed using **4-bit INT4 quantization (GGUF format)**, lowering runtime RAM to roughly ~350MB.
-2. **C++ Inference Bindings**: Utilizing `llama-cpp-python` and native CPU bindings for Whisper (`whisper.cpp`/`faster-whisper`) ensures execution speeds are fast without installing multi-gigabyte library environments.
+2. **C++ Inference Bindings**: Utilizing `llama-cpp-python` and native CPU bindings ensures execution speeds are fast without installing multi-gigabyte library environments.
 3. **Streamlined UI Framework**: Employs minimalist UI tooling to minimize the final dependency chain and keep installation steps fast and lightweight.
 
 ---
