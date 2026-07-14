@@ -37,7 +37,7 @@ fi
 # ── 2. PRE-CACHE THE SEMANTIC VECTOR TRANSFORMER ──────────────────────────────
 # Force download sentence-transformers files via python so they are ready offline
 echo "Pre-caching sentence-transformers vector engine weights for offline evaluation..."
-python3 -c "
+python -c "
 try:
     from sentence_transformers import SentenceTransformer
     print('Downloading vector engine weights...')
