@@ -197,18 +197,23 @@ def load_nllb_translator():
 
 nllb_tokenizer, nllb_model = load_nllb_translator()
 
-def translate_to_hausa(text_to_translate):
-    """Pipes English textual outputs through NLLB to guarantee authentic grammar structures."""
+def translate_text(text_to_translate, source_lang="English", target_lang="Hausa"):
+    """Translates text bi-directionally between English and Hausa using NLLB-200."""
     if nllb_tokenizer is None or nllb_model is None:
-        return text_to_translate # Fallback safely if model loading fails
+        return text_to_translate
+        
+    # Map languages to standard NLLB language codes
+    code_map = {"English": "eng_Latn", "Hausa": "hau_Latn"}
+    src_code = code_map.get(source_lang, "eng_Latn")
+    tgt_code = code_map.get(target_lang, "hau_Latn")
+    
     try:
         from transformers import pipeline
-        # Target code for standard Hausa language profile
+        # Pass language codes directly inside the translator call
         translator = pipeline(
-            'translation', model=nllb_model, tokenizer=nllb_tokenizer, 
-            src_lang='eng_Latn', tgt_lang='hau_Latn', max_length=512
+            'translation', model=nllb_model, tokenizer=nllb_tokenizer, max_length=512
         )
-        output = translator(text_to_translate)
+        output = translator(text_to_translate, src_lang=src_code, tgt_lang=tgt_code)
         return output[0]['translation_text']
     except Exception:
         return text_to_translate
