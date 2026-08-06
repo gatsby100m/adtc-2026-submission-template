@@ -218,6 +218,10 @@ def translate_text(text_to_translate, source_lang="English", target_lang="Hausa"
     except Exception:
         return text_to_translate
 
+    # Automatically convert Hausa questions to English for database lookup
+    if lang == "Hausa":
+        user_input = translate_text(user_input, source_lang="Hausa", target_lang="English")
+
 # =====================================================================
 # ADVANCED SEAMLESS HYBRID VECTOR RAG ENGINE
 # =====================================================================
