@@ -308,34 +308,34 @@ def run_ai_advisory(user_input, lang):
             fallback_text = translate_text(fallback_text, source_lang="English", target_lang="Hausa")
         return f"**{fallback_text}**{cultural_closing}"
 
-311 # ========================================================
-312 # STREAMLIT GRAPHICAL INTERFACE
-313 # ========================================================
-314 LANG_DICT = {
-315     "English": {
-316         "title": "🌾 Smart Farm Assistant",
-317         "subtitle": "AI-Powered West African Crop Advisor & Ledger Engine",
-318         "proverb_title": "💡 Cultural Farm Wisdom",
-319         "submit_btn": "Analyze Symptoms",
-320         "crop_select": "Select Your Crop Type:",
-321         "date_input": "Select Planting Date:",
-322         "calc_btn": "Calculate Crop Timeline",
-323         "ledger_input": "Type transaction details (e.g., 'Sold maize for 50000 Naira'):",
-324         "log_btn": "Log Transaction Automatically"
-325     },
-326     "Hausa": {
-327         "title": "🌾 Mataimakin Manomi na AI",
-328         "subtitle": "Kwamfutar Shawarwari da Jagorancin Kudaden Gona",
-329         "proverb_title": "💡 Karin Maganar Manoma",
-330         "submit_btn": "Bincika Alamomi",
-331         "crop_select": "Zabi Irin Amfanin Gona:",
-332         "date_input": "Zabi Ranar Shuka:",
-333         "calc_btn": "Lissafta Lokacin Gona",
-334         "ledger_input": "Rubuta bayanin kudi (misali, 'An sayar da masara kudin Naira 50000'):",
-335         "log_btn": "Shigar da Bayanin Kudi"
+# ========================================================
+# STREAMLIT GRAPHICAL INTERFACE
+# ========================================================
+LANG_DICT = {
+     "English": {
+         "title": "🌾 Smart Farm Assistant",
+         "subtitle": "AI-Powered West African Crop Advisor & Ledger Engine",
+         "proverb_title": "💡 Cultural Farm Wisdom",
+         "submit_btn": "Analyze Symptoms",
+         "crop_select": "Select Your Crop Type:",
+         "date_input": "Select Planting Date:",
+         "calc_btn": "Calculate Crop Timeline",
+         "ledger_input": "Type transaction details (e.g., 'Sold maize for 50000 Naira'):",
+         "log_btn": "Log Transaction Automatically"
+     },
+     "Hausa": {
+         "title": "🌾 Mataimakin Manomi na AI",
+         "subtitle": "Kwamfutar Shawarwari da Jagorancin Kudaden Gona",
+         "proverb_title": "💡 Karin Maganar Manoma",
+         "submit_btn": "Bincika Alamomi",
+         "crop_select": "Zabi Irin Amfanin Gona:",
+         "date_input": "Zabi Ranar Shuka:",
+         "calc_btn": "Lissafta Lokacin Gona",
+         "ledger_input": "Rubuta bayanin kudi (misali, 'An sayar da masara kudin Naira 50000'):",
+         "log_btn": "Shigar da Bayanin Kudi"
     }
 }
-336 st.set_page_config(page_title="SmartFarmAssistant", layout="wide")
+ st.set_page_config(page_title="SmartFarmAssistant", layout="wide")
 
 if llm is None:
     st.warning("Application running in fallback lookup mode. AI vector features require active weights storage paths.")
