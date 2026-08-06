@@ -374,6 +374,29 @@ def calculate_crop_timeline(crop, planting_date):
                     f"🧺 Harvest Readiness Target: {harvest.strftime('%B %d, %Y')}")
     except Exception as e:
         return f"Timeline calculator error: {e}"
+        
+# Place it directly below calculate_crop_timeline and above the st.tabs line:
+def parse_financial_statement(statement_text):
+    """Fallback standard NLP regex parsing engine to extract farm financial updates."""
+    text_lower = statement_text.lower()
+    numbers = [float(s) for s in re.findall(r'\d+', text_lower)]
+    amount = numbers if numbers else 0.0
+    
+    if "sold" in text_lower or "sayar" in text_lower or "revenue" in text_lower:
+        st.session_state.revenue += amount
+        return f"📈 Automatically identified a sale! Logged +{amount:,.2f} Naira to Revenue."
+    elif "labour" in text_lower or "lebur" in text_lower or "worker" in text_lower:
+        st.session_state.labour_cost += amount
+        return f"📉 Logged -{amount:,.2f} Naira to Labour Costs."
+    elif "fertilizer" in text_lower or "taki" in text_lower or "chemical" in text_lower:
+        st.session_state.fertilizer_cost += amount
+        return f"📉 Logged -{amount:,.2f} Naira to Fertilizer Costs."
+    elif "rent" in text_lower or "tractor" in text_lower or "kayan aiki" in text_lower:
+        st.session_state.equipment_cost += amount
+        return f"📉 Logged -{amount:,.2f} Naira to Equipment Costs."
+    else:
+        st.session_state.other_expenses += amount
+        return f"📝 Categorized generic ledger transaction entry: -{amount:,.2f} Naira logged."
 
 tab1, tab2, tab3 = st.tabs([
     labels.get("diagnose_tab", "AI Advisor"),
