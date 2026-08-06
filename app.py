@@ -308,10 +308,34 @@ def run_ai_advisory(user_input, lang):
             fallback_text = translate_text(fallback_text, source_lang="English", target_lang="Hausa")
         return f"**{fallback_text}**{cultural_closing}"
 
-# =====================================================================
-# STREAMLIT GRAPHICAL INTERFACE
-# =====================================================================
-st.set_page_config(page_title="SmartFarmAssistant", layout="wide")
+311 # ========================================================
+312 # STREAMLIT GRAPHICAL INTERFACE
+313 # ========================================================
+314 LANG_DICT = {
+315     "English": {
+316         "title": "🌾 Smart Farm Assistant",
+317         "subtitle": "AI-Powered West African Crop Advisor & Ledger Engine",
+318         "proverb_title": "💡 Cultural Farm Wisdom",
+319         "submit_btn": "Analyze Symptoms",
+320         "crop_select": "Select Your Crop Type:",
+321         "date_input": "Select Planting Date:",
+322         "calc_btn": "Calculate Crop Timeline",
+323         "ledger_input": "Type transaction details (e.g., 'Sold maize for 50000 Naira'):",
+324         "log_btn": "Log Transaction Automatically"
+325     },
+326     "Hausa": {
+327         "title": "🌾 Mataimakin Manomi na AI",
+328         "subtitle": "Kwamfutar Shawarwari da Jagorancin Kudaden Gona",
+329         "proverb_title": "💡 Karin Maganar Manoma",
+330         "submit_btn": "Bincika Alamomi",
+331         "crop_select": "Zabi Irin Amfanin Gona:",
+332         "date_input": "Zabi Ranar Shuka:",
+333         "calc_btn": "Lissafta Lokacin Gona",
+334         "ledger_input": "Rubuta bayanin kudi (misali, 'An sayar da masara kudin Naira 50000'):",
+335         "log_btn": "Shigar da Bayanin Kudi"
+    }
+}
+336 st.set_page_config(page_title="SmartFarmAssistant", layout="wide")
 
 if llm is None:
     st.warning("Application running in fallback lookup mode. AI vector features require active weights storage paths.")
