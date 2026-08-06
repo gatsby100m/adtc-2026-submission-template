@@ -218,14 +218,13 @@ def translate_text(text_to_translate, source_lang="English", target_lang="Hausa"
     except Exception:
         return text_to_translate
 
-    # Automatically convert Hausa questions to English for database lookup
-    if lang == "Hausa":
-        user_input = translate_text(user_input, source_lang="Hausa", target_lang="English")
-
 # =====================================================================
 # ADVANCED SEAMLESS HYBRID VECTOR RAG ENGINE
 # =====================================================================
-def run_ai_advisory(user_input, lang):
+def run_ai_advisory(user_input, lang): 
+    # Automatically convert Hausa questions to English for database lookup
+    if lang == "Hausa":
+        user_input = translate_text(user_input, source_lang="Hausa", target_lang="English")
     cultural_closing = "\n\n*May your barns overflow thisseason! Mandani na gari!*" if lang == "Hausa" else "\n\n*May your harvest be heavy and rewarding!*"
     
     # Baseline fallback advice context parameters
