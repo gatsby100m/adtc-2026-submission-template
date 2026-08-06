@@ -354,6 +354,27 @@ with col_prov:
 st.title(labels["title"])
 st.subheader(labels["subtitle"])
 
+def calculate_crop_timeline(crop, planting_date):
+    """Calculates general growth milestone durations for standard West African crops."""
+    try:
+        import datetime
+        if crop == "Maize":
+            germination = planting_date + datetime.timedelta(days=5)
+            flowering = planting_date + datetime.timedelta(days=55)
+            harvest = planting_date + datetime.timedelta(days=110)
+            return (f"🌱 Germination Expected: {germination.strftime('%B %d, %Y')}\n"
+                    f"🌽 Flowering/Tasseling Stage: {flowering.strftime('%B %d, %Y')}\n"
+                    f"🧺 Harvest Readiness Target: {harvest.strftime('%B %d, %Y')}")
+        elif crop == "Cassava":
+            root_initiation = planting_date + datetime.timedelta(days=30)
+            canopy_closure = planting_date + datetime.timedelta(days=90)
+            harvest = planting_date + datetime.timedelta(days=300)
+            return (f"🌱 Root Initiation Phase: {root_initiation.strftime('%B %d, %Y')}\n"
+                    f"🌿 Full Canopy Development: {canopy_closure.strftime('%B %d, %Y')}\n"
+                    f"🧺 Harvest Readiness Target: {harvest.strftime('%B %d, %Y')}")
+    except Exception as e:
+        return f"Timeline calculator error: {e}"
+
 tab1, tab2, tab3 = st.tabs([
     labels.get("diagnose_tab", "AI Advisor"),
     labels.get("calendar_tab", "Timeline Calculator"),
