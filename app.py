@@ -236,7 +236,7 @@ def run_ai_advisory(user_input, lang):
     if encoder is not None and db_embeddings is not None and db_chunks is not None:
         try:
             query_embedding = encoder.encode(user_input, convert_to_tensor=True)
-            cos_scores = util.cos_sim(query_embedding, db_embeddings)[0]
+            cos_scores = util.cos_sim(query_embedding, db_embeddings)
             best_match_idx = int(np.argmax(cos_scores.cpu().numpy()))
             
             # Extract factual paragraph matching the target semantic coordinate query strings
