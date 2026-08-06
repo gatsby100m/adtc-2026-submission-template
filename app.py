@@ -41,27 +41,34 @@ os.makedirs(MODEL_DIR, exist_ok=True)
 os.makedirs(RAG_DIR, exist_ok=True)
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-# Direct paths to your 4 core West African agricultural textbooks
-BOOK_URLS = {
-    "maize_diseases.pdf": "https://researchgate.net",
-    "tomato_pepper_nihort.pdf": "https://nihort.gov.ng",
-    "tomato_disease_bayer.pdf": "https://bayer.com",
-    "pest_disease_africa.pdf": "https://researchgate.net"
+# Mapped directly to your 5 shared Google Drive File IDs
+BOOK_DRIVE_IDS = {
+    "maize_diseases.pdf": "1lziyd4oXiiWK8zGBzz9zz12JSRlOiufy",
+    "plant_pathology_encyclopedia.pdf": "1LzwK91UP8sBZ0dgnAWgjTfX9bXKTl0zS",
+    "pest_disease_manual.pdf": "1BLWpBleJzN8icgpoyJuiwJRtgSK9Z8Rw",
+    "tomato_production_guide.pdf": "1aFo6Y57zheat6-FgwttnbBzwnHFl9EjL",
+    "bayer_tomato_disease_guide.pdf": "1ugRejJFvFKKCeTRR5jWrehYw6TUzaJZB"
 }
 
 def ensure_books_exist():
-    """Checks data directory and auto-downloads missing textbooks on first boot."""
-    for filename, download_url in BOOK_URLS.items():
+    """Checks data directory and auto-downloads your Google Drive textbooks using gdown."""
+    try:
+        import gdown
+    except ImportError:
+        os.system("pip install gdown")
+        import gdown
+
+    for filename, file_id in BOOK_DRIVE_IDS.items():
         destination_path = os.path.join(RAG_DIR, filename)
         if not os.path.exists(destination_path):
-            with st.spinner(f"Downloading {filename} for offline use... Please wait."):
+            with st.spinner(f"Downloading {filename} from Google Drive... Please wait."):
                 try:
-                    opener = urllib.request.build_opener()
-                    opener.addheaders = [('User-agent', 'Mozilla/5.0')]
-                    urllib.request.install_opener(opener)
-                    urllib.request.urlretrieve(download_url, destination_path)
+                    gdown.download(id=file_id, output=destination_path, quiet=True)
                 except Exception as e:
                     st.error(f"Could not auto-download {filename}. Error: {e}")
+
+# Run background textbook loader immediately
+ensure_books_exist()
 
 # Run background textbook loader immediately
 ensure_books_exist()
