@@ -221,11 +221,12 @@ def translate_text(text_to_translate, source_lang="English", target_lang="Hausa"
 # =====================================================================
 # ADVANCED SEAMLESS HYBRID VECTOR RAG ENGINE
 # =====================================================================
-def run_ai_advisory(user_input, lang): 
+def run_ai_advisory(user_input, lang):
     # Automatically convert Hausa questions to English for database lookup
     if lang == "Hausa":
         user_input = translate_text(user_input, source_lang="Hausa", target_lang="English")
-    cultural_closing = "\n\n*May your barns overflow thisseason! Mandani na gari!*" if lang == "Hausa" else "\n\n*May your harvest be heavy and rewarding!*"
+    
+    cultural_closing = "\n\n*May your barns overflow this season! Mandani na gari!*" if lang == "Hausa" else "\n\n*May your harvest be heavy and rewarding!*"
     
     # Baseline fallback advice context parameters
     matched_fact = "Advise general monitoring, checking soil moisture, clearing competitive weeds, and maintaining row spacing layout protocols."
@@ -249,8 +250,8 @@ def run_ai_advisory(user_input, lang):
             # Step A: Perform immediate visual image pipeline conversions
             if PDF_LIBS_AVAILABLE:
                 images = convert_from_path(
-                    best_match_meta["file_path"], 
-                    first_page=best_match_meta["page_num"], 
+                    best_match_meta["file_path"],
+                    first_page=best_match_meta["page_num"],
                     last_page=best_match_meta["page_num"]
                 )
                 if images:
@@ -259,14 +260,14 @@ def run_ai_advisory(user_input, lang):
                     st.session_state.current_page_img = img_path
         except Exception:
             pass
-
+            
     # Quick exit path if LLM structures are unavailable
     if (not LLAMA_AVAILABLE) or (llm is None):
         final_text = f"**Offline Semantic Match:** {matched_fact}\n\n*(Note: Running in high-performance lookup fallback mode).*"
         if lang == "Hausa":
-            final_text = translate_to_hausa(final_text)
+            final_text = translate_text(final_text, source_lang="English", target_lang="Hausa")
         return f"{final_text}{cultural_closing}"
-
+        
     try:
         # 2. Instruct Qwen to extract data strictly in English first to ensure reasoning alignment
         system_instruction = (
@@ -275,13 +276,11 @@ def run_ai_advisory(user_input, lang):
             "Elaborate on the details to sound friendly and encouraging, but your facts MUST stay completely anchored to the factsheet context. "
             "Do NOT invent unrelated facts, and write your final answer ONLY in clear, concise English text."
         )
-        
         prompt = (
-            f"<|im_start|>system\n{system_instruction}\nFactsheetContext: {matched_fact}<|im_end|>\n"
+            f"<|im_start|>system\n{system_instruction}\nFactsheetContext:{matched_fact}<|im_end|>\n"
             f"<|im_start|>user\n{user_input}<|im_end|>\n"
             f"<|im_start|>assistant\n"
         )
-        
         response = llm(
             prompt,
             max_tokens=250,
@@ -290,25 +289,23 @@ def run_ai_advisory(user_input, lang):
             repeat_penalty=1.1,
             stop=["<|im_end|>", "<|im_start|>", "User:", "System:", "Tambaya:"]
         )
-        
         ai_response = response['choices'][0]['text'].strip()
         ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response)  # Clear formatting leaks
-
+        
         if len(ai_response) <= 3:
             ai_response = f"Farming Truth Block: {matched_fact}"
-
+            
         # 3. Handle Language Execution Assembly Pipeline routing paths
         if lang == "Hausa":
             # Translate English text output directly through NLLB to get clean Hausa
             with st.spinner("An canza bayani zuwa Harshen Hausa... (Translating response...)"):
-                ai_response = translate_to_hausa(ai_response)
-        
+                ai_response = translate_text(ai_response, source_lang="English", target_lang="Hausa")
         return f"{ai_response}{cultural_closing}"
         
     except Exception as e:
         fallback_text = f"Offline Semantic Fallback: {matched_fact}"
         if lang == "Hausa":
-            fallback_text = translate_to_hausa(fallback_text)
+            fallback_text = translate_text(fallback_text, source_lang="English", target_lang="Hausa")
         return f"**{fallback_text}**{cultural_closing}"
 
 # =====================================================================
