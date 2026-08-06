@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Download your model weight files.
+# Download model weight files for ADTC 2026 Submission
 #
 # Rules:
 #   - Must be idempotent (safe to run multiple times).
@@ -10,11 +10,11 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# ── 1. DOWNLOAD THE CORE QWEN LLM WEIGHTS ─────────────────────────────────────
+# ── 1. DOWNLOAD THE CORE QWEN 2.5 LLM WEIGHTS ─────────────────────────────────
 MODEL_DIR="$HERE/models"
-MODEL_FILE="$MODEL_DIR/qwen1_5-0_5b-chat-q4_k_m.gguf"
+MODEL_FILE="$MODEL_DIR/qwen2.5-0.5b-instruct-q4_k_m.gguf"
 
-# CORRECTED DIRECT FILE LINK (Bypasses Hugging Face frontend UI, works 100% token-free)
+# DIRECT FILE LINK (Bypasses Hugging Face frontend UI, works 100% token-free)
 MODEL_URL="https://huggingface.co"
 
 mkdir -p "$MODEL_DIR"
@@ -22,7 +22,7 @@ mkdir -p "$MODEL_DIR"
 if [[ -f "$MODEL_FILE" ]]; then
   echo "LLM weight binary already present at $MODEL_FILE — skipping download"
 else
-  echo "Downloading $MODEL_URL → $MODEL_FILE (~350 MB)…"
+  echo "Downloading $MODEL_URL → $MODEL_FILE (~398 MB)…"
   if command -v curl > /dev/null 2>&1; then
     curl -L --fail --progress-bar -o "$MODEL_FILE.partial" "$MODEL_URL"
   elif command -v wget > /dev/null 2>&1; then
@@ -34,14 +34,14 @@ else
   mv "$MODEL_FILE.partial" "$MODEL_FILE"
 fi
 
-# ── 2. PRE-CACHE THE SEMANTIC VECTOR TRANSFORMER ──────────────────────────────
+# ── 2. PRE-CACHE THE MULTILINGUAL SEMANTIC VECTOR TRANSFORMER ──────────────────
 # Force download sentence-transformers files via python so they are ready offline
 echo "Pre-caching sentence-transformers vector engine weights for offline evaluation..."
 python -c "
 try:
     from sentence_transformers import SentenceTransformer
-    print('Downloading vector engine weights...')
-    SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+    print('Downloading upgraded multilingual vector map weights...')
+    SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')
     print('Vector embedding cache complete!')
 except Exception as e:
     print('Vector engine setup warning:', e)
