@@ -306,7 +306,7 @@ def run_ai_advisory(user_input, lang):
         fallback_text = f"Offline Semantic Fallback: {matched_fact}"
         if lang == "Hausa":
             fallback_text = translate_text(fallback_text, source_lang="English", target_lang="Hausa")
-        return f"**{fallback_text}**{cultural_closing}")
+        return f"**{fallback_text}**{cultural_closing}"
 
 311 # ========================================================
 312 # STREAMLIT GRAPHICAL INTERFACE
