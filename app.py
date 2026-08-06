@@ -335,7 +335,7 @@ LANG_DICT = {
          "log_btn": "Shigar da Bayanin Kudi"
     }
 }
-st.set_page_config(page_title="SmartFarmAssistant", layout="wide")
+#st.set_page_config(page_title="SmartFarmAssistant", layout="wide")
 
 if llm is None:
     st.warning("Application running in fallback lookup mode. AI vector features require active weights storage paths.")
