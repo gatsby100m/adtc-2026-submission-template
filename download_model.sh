@@ -11,7 +11,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── 1. DOWNLOAD THE CORE QWEN 2.5 LLM WEIGHTS ─────────────────────────────────
-MODEL_DIR="$HERE/models"
+MODEL_DIR="$HERE/model"
 MODEL_FILE="$MODEL_DIR/qwen2.5-0.5b-instruct-q4_k_m.gguf"
 
 # DIRECT FILE LINK (Bypasses Hugging Face frontend UI, works 100% token-free)
