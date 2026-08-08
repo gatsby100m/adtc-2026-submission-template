@@ -300,15 +300,22 @@ def run_ai_advisory(user_input, lang):
         # 3. Handle Language Execution Assembly Pipeline routing paths
         if lang == "Hausa":
             # Translate English text output directly through NLLB to get clean Hausa
-            with st.spinner("An canza bayani zuwa Harshen Hausa... (Translating response...)"):
-                ai_response = translate_text(ai_response, source_lang="English", target_lang="Hausa")
-        return f"{ai_response}{cultural_closing}"
+    try:
+        # Move import to the top of the block so it is safely available
+        import re 
+        
+        with st.spinner("An canza bayani zuwa Harshen Hausa... (Translating response...)"):
+            ai_response = translate_text(ai_response, source_lang="English", target_lang="Hausa")
+        
+        # Assign to final_text so the code below can process it
+        final_text = ai_response
+
     except Exception as e:
         st.error(f"AI Generation Error: {e}")
-        final_text = context
+        # Safe fallback string so final_text always has a valid value
+        final_text = "An samu matsala wajen fassara bayanin." 
         
     if lang == "Hausa" and final_text:
-        import re
         sentences = re.split(r'(?<=[.!?])\s+', final_text)
         translated_sentences = []
         for sentence in sentences:
@@ -321,8 +328,8 @@ def run_ai_advisory(user_input, lang):
                     translated_sentences.append(sentence)
         final_text = " ".join(translated_sentences)
         
-    return f"{final_text}{cultural_closing}"     
-    
+    return f"{final_text}{cultural_closing}"
+
 # ========================================================
 # STREAMLIT GRAPHICAL INTERFACE
 # ========================================================
