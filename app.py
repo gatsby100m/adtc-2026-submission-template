@@ -303,7 +303,7 @@ def run_ai_advisory(user_input, lang):
             with st.spinner("An canza bayani zuwa Harshen Hausa... (Translating response...)"):
                 ai_response = translate_text(ai_response, source_lang="English", target_lang="Hausa")
         return f"{ai_response}{cultural_closing}"
-       except Exception as e:
+        except Exception as e:
         st.error(f"AI Generation Error: {e}")
         final_text = context
         
