@@ -270,11 +270,13 @@ def run_ai_advisory(user_input, lang):
         
     try:
         # 2. Instruct Qwen to extract data strictly in English first to ensure reasoning alignment
+                chosen_language = "Hausa" if lang == "Hausa" else "English"
         system_instruction = (
-            "You are an expert African a..."
-            "CRITICAL: Use the provided..."
-            "Elaborate on the details to..."
-            "Do NOT invent unrelated fac..."
+            "You are an expert African agricultural advisor. "
+            "CRITICAL: Use the provided Factsheet Context to answer the user's question accurately. "
+            "Elaborate on the details to sound friendly and encouraging, but your facts MUST stay completely "
+            "anchored to the factsheet context. "
+            f"Do NOT invent unrelated facts, and write your final answer ONLY in clear, concise {chosen_language} text."
         )
 
         prompt = (
