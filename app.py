@@ -303,13 +303,26 @@ def run_ai_advisory(user_input, lang):
             with st.spinner("An canza bayani zuwa Harshen Hausa... (Translating response...)"):
                 ai_response = translate_text(ai_response, source_lang="English", target_lang="Hausa")
         return f"{ai_response}{cultural_closing}"
+       except Exception as e:
+        st.error(f"AI Generation Error: {e}")
+        final_text = context
         
-    except Exception as e:
-        fallback_text = f"Offline Semantic Fallback: {matched_fact}"
-        if lang == "Hausa":
-            fallback_text = translate_text(fallback_text, source_lang="English", target_lang="Hausa")
-        return f"**{fallback_text}**{cultural_closing}"
-
+    if lang == "Hausa" and final_text:
+        import re
+        sentences = re.split(r'(?<=[.!?])\s+', final_text)
+        translated_sentences = []
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if sentence:
+                try:
+                    translated_s = translate_text(sentence, src_lang="eng_Latn", tgt_lang="hau_Latn")
+                    translated_sentences.append(translated_s)
+                except Exception:
+                    translated_sentences.append(sentence)
+        final_text = " ".join(translated_sentences)
+        
+    return f"{final_text}{cultural_closing}"     
+    
 # ========================================================
 # STREAMLIT GRAPHICAL INTERFACE
 # ========================================================
