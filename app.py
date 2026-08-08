@@ -292,6 +292,8 @@ def run_ai_advisory(user_input, lang):
             stop=["<|im_end|>", "<|im_start|>", "User:", "System:", "Tambaya:"]
         )
         ai_response = response['choices'][0]['text'].strip()
+        
+        import re # Keep re safe here
         ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response)  # Clear formatting leaks
         
         if len(ai_response) <= 3:
@@ -300,20 +302,15 @@ def run_ai_advisory(user_input, lang):
         # 3. Handle Language Execution Assembly Pipeline routing paths
         if lang == "Hausa":
             # Translate English text output directly through NLLB to get clean Hausa
-    try:
-        # Move import to the top of the block so it is safely available
-        import re 
+            with st.spinner("An canza bayani zuwa Harshen Hausa... (Translating response...)"):
+                ai_response = translate_text(ai_response, source_lang="English", target_lang="Hausa")
         
-        with st.spinner("An canza bayani zuwa Harshen Hausa... (Translating response...)"):
-            ai_response = translate_text(ai_response, source_lang="English", target_lang="Hausa")
-        
-        # Assign to final_text so the code below can process it
+        # Assign to final_text so the logic below works cleanly
         final_text = ai_response
 
     except Exception as e:
         st.error(f"AI Generation Error: {e}")
-        # Safe fallback string so final_text always has a valid value
-        final_text = "An samu matsala wajen fassara bayanin." 
+        final_text = "An samu matsala wajen fassara bayanin."
         
     if lang == "Hausa" and final_text:
         sentences = re.split(r'(?<=[.!?])\s+', final_text)
@@ -328,7 +325,7 @@ def run_ai_advisory(user_input, lang):
                     translated_sentences.append(sentence)
         final_text = " ".join(translated_sentences)
         
-    return f"{final_text}{cultural_closing}"
+    return f"{final_text}{cultural_closing}" 
 
 # ========================================================
 # STREAMLIT GRAPHICAL INTERFACE
