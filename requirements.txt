@@ -10,4 +10,5 @@ huggingface_hub
 # CRITICAL ADDITIONS FOR THE NEW MULTI-BOOK VISUAL RAG ENGINE
 pypdf
 pdf2image
-transformers
+transformers 
+gdown
