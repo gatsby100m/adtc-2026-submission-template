@@ -242,11 +242,18 @@ def run_ai_advisory(user_input, lang):
         )
         context_label = "FactsheetContext"
 
-    if encoder is not None and active_db["embeddings"] is not None and len(active_db["chunks"]) > 0:
+    # CRITICAL TRACKING CHECK: Only run lookups if documents actually exist inside memory structures
+    if (encoder is not None and 
+        active_db is not None and 
+        active_db.get("embeddings") is not None and 
+        len(active_db.get("chunks", [])) > 0):
+        
         try:
             query_embedding = encoder.encode(user_input, convert_to_tensor=True)
             cos_scores = util.cos_sim(query_embedding, active_db["embeddings"])
             best_match_idx = int(np.argmax(cos_scores.cpu().numpy()))
+            
+            # Safe access confirmed via numeric list validation parameters
             matched_fact = active_db["chunks"][best_match_idx]
             best_match_meta = active_db["metadata"][best_match_idx]
             
@@ -265,6 +272,10 @@ def run_ai_advisory(user_input, lang):
                     st.session_state.current_page_img = img_path
         except Exception:
             pass
+    else:
+        # Graceful notice letting you know the database folders are currently blank
+        msg = "⚠️ Library index empty. Please ensure your PDFs are in 'rag_data/' directory!" if lang == "English" else "⚠️ Littattafan bayani babu su. Da fatan za a duba babban fayil na 'rag_data/'!"
+        return f"{msg}{cultural_closing}"
 
     if (not LLAMA_AVAILABLE) or (llm is None):
         prefix = "**Tabbataccen Bayani Daga Littafi:** " if lang == "Hausa" else "**Offline Semantic Match:** "
