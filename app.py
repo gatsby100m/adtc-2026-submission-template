@@ -78,6 +78,28 @@ def ensure_books_exist():
 
 # Run setup scans on launch to confirm file structures match configuration settings
 ensure_books_exist()
+def ensure_model_exists():
+    """Checks for the Qwen GGUF model and auto-downloads it from Hugging Face if missing."""
+    if not os.path.exists(MODEL_PATH):
+        hf_url = f"https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf?download=true"
+        st.info("🤖 GGUF Model file not found. Starting automatic download from Hugging Face (~382MB)...")
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        try:
+            import urllib.request
+            def download_progress(count, block_size, total_size):
+                percent = min(int(count * block_size * 100 / total_size), 100)
+                progress_bar.progress(percent / 100)
+                status_text.text(f"Downloading model: {percent}% complete")
+            urllib.request.urlretrieve(hf_url, MODEL_PATH, reporthook=download_progress)
+            st.success("🎉 Model downloaded successfully! Initializing LLM engine...")
+            status_text.empty()
+            progress_bar.empty()
+        except Exception as e:
+            st.error(f"❌ Failed to download model from Hugging Face: {e}")
+
+# Trigger the model downloader alongside your book checks
+ensure_model_exists()
 
 #=====================================================================
 # MEMORY PRESERVATION ENGINE LOGIC
