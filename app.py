@@ -137,54 +137,88 @@ def index_all_downloaded_books_by_lang():
 # =====================================================================
 # ADVANCED MULTI-BOOK EXTRACTION ENGINE
 # =====================================================================
+# =========================================================================
+# 1. DEDICATED ENGLISH INDEX PIPELINE
+# =========================================================================
 @st.cache_resource
-def index_all_downloaded_books():
-    """Loops through all downloaded PDFs, extracts text chunks, and tracks metadata."""
-    if not TRANSFORMERS_AVAILABLE or not PDF_LIBS_AVAILABLE:
-        return None, None, None
+def index_english_library():
+    """Independent engine that ONLY extracts and indexes English PDFs."""
+    if not TRANSFORMERS_AVAILABLE or not PDF_LIBS_AVAILABLE or encoder is None:
+        return {"chunks": [], "metadata": [], "embeddings": None}
         
-    master_chunks = []
-    master_metadata = []
-    
-    for filename in os.listdir(RAG_DIR):
+    english_dir = os.path.join(RAG_DIR, "english")
+    if not os.path.exists(english_dir):
+        return {"chunks": [], "metadata": [], "embeddings": None}
+
+    chunks, metadata = [], []
+    for filename in os.listdir(english_dir):
         if filename.endswith(".pdf"):
-            file_path = os.path.join(RAG_DIR, filename)
+            file_path = os.path.join(english_dir, filename)
             try:
                 reader = PdfReader(file_path)
                 for idx, page in enumerate(reader.pages):
                     raw_text = page.extract_text() or ""
                     if len(raw_text.strip()) > 50:
-                        master_chunks.append(raw_text)
-                        master_metadata.append({
-                            "file_name": filename,
-                            "file_path": file_path,
-                            "page_num": idx + 1
-                        })
+                        chunks.append(raw_text)
+                        metadata.append({"file_name": filename, "file_path": file_path, "page_num": idx + 1})
             except Exception:
                 continue
-                
-    if not master_chunks:
-        return None, None, None
 
-# Load your split database structure globally
-# === CRITICAL RUNTIME LOOKUP INITIALIZATION ===
-# This block initializes your dual-language (English & Hausa) vector indices safely
-if encoder is not None:
-    try:
-        db_indices = index_all_downloaded_books_by_lang()
-    except Exception:
-        db_indices = {}
-else:
-    db_indices = {}
+    if chunks:
+        try:
+            embeddings = encoder.encode(chunks, convert_to_tensor=True, show_progress_bar=False)
+            return {"chunks": chunks, "metadata": metadata, "embeddings": embeddings}
+        except Exception:
+            return {"chunks": [], "metadata": [], "embeddings": None}
+    return {"chunks": [], "metadata": [], "embeddings": None}
 
-# --- BACKWARD COMPATIBILITY FALLBACKS ---
-# Ensures older parts of your code looking for global single variables don't crash
-if "english" in db_indices:
-    db_chunks = db_indices["english"]["chunks"]
-    db_metadata = db_indices["english"]["metadata"]
-    db_embeddings = db_indices["english"]["embeddings"]
-else:
-    db_chunks, db_metadata, db_embeddings = [], [], None
+
+# =========================================================================
+# 2. DEDICATED HAUSA INDEX PIPELINE
+# =========================================================================
+@st.cache_resource
+def index_hausa_library():
+    """Independent engine that ONLY extracts and indexes Hausa PDFs."""
+    if not TRANSFORMERS_AVAILABLE or not PDF_LIBS_AVAILABLE or encoder is None:
+        return {"chunks": [], "metadata": [], "embeddings": None}
+        
+    hausa_dir = os.path.join(RAG_DIR, "hausa")
+    if not os.path.exists(hausa_dir):
+        return {"chunks": [], "metadata": [], "embeddings": None}
+
+    chunks, metadata = [], []
+    for filename in os.listdir(hausa_dir):
+        if filename.endswith(".pdf"):
+            file_path = os.path.join(hausa_dir, filename)
+            try:
+                reader = PdfReader(file_path)
+                for idx, page in enumerate(reader.pages):
+                    raw_text = page.extract_text() or ""
+                    if len(raw_text.strip()) > 50:
+                        chunks.append(raw_text)
+                        metadata.append({"file_name": filename, "file_path": file_path, "page_num": idx + 1})
+            except Exception:
+                continue
+
+    if chunks:
+        try:
+            embeddings = encoder.encode(chunks, convert_to_tensor=True, show_progress_bar=False)
+            return {"chunks": chunks, "metadata": metadata, "embeddings": embeddings}
+        except Exception:
+            return {"chunks": [], "metadata": [], "embeddings": None}
+    return {"chunks": [], "metadata": [], "embeddings": None}
+
+# =========================================================================
+# 3. RUNTIME INITIALIZATION & BACKWARD COMPATIBILITY
+# =========================================================================
+# Initialize both libraries independently
+english_db = index_english_library()
+hausa_db = index_hausa_library()
+
+# Map back to old variables so other parts of your code don't throw NameErrors
+db_chunks = english_db["chunks"]
+db_metadata = english_db["metadata"]
+db_embeddings = english_db["embeddings"]
 
 CULTURAL_PROVERBS = [
     "Yoruba: Bí énìyàn bá șegbingbin, béèni yóò șekórè. (As we sow, so shall we reap.)",
@@ -210,25 +244,42 @@ if "current_book_name" not in st.session_state: st.session_state.current_book_na
 # ADVANCED SEAMLESS HYBRID VECTOR RAG ENGINE
 # =====================================================================
 def run_ai_advisory(user_input, lang):
-    lang_key = "hausa" if lang == "Hausa" else "english"
-    cultural_closing = "\n\n*May your barns overflow thisseason! Mandani na gari!*" if lang == "Hausa" else "\n\n*May your harvest be heavy and rewarding!*"
+    cultural_closing = "\n\n*Allah ya ba da amfanin gona mai albarka! Mandani na gari!*" if lang == "Hausa" else "\n\n*May your harvest be heavy and rewarding!*"
     
-    # Baseline fallback advice context parameters
-    matched_fact = "Advisegeneral monitoring, checking soil moisture, clearing competitive weeds, and maintaining row spacing layout protocols." if lang_key == "english" else "Bincika damshin ƙasa, cire ciyayi, da kiyaye tazarar shuka."
+    # 1. Select the correct independent database block and baseline fallback texts
+    if lang == "Hausa":
+        active_db = hausa_db
+        matched_fact = "Bincika damshin ƙasa, cire ciyayi, da kiyaye tazarar shuka."
+        system_instruction = (
+            "Kai babban masanin shawarwarin aikin gona ne na Afirka. "
+            "HAKKI: Yi amfani da bayanan da aka bayar a ƙasa don amsa tambayar manomi daidai. "
+            "Kada ka ƙirƙiri wani abu da babu shi a cikin bayanan. "
+            "GARGADI: Dole ne ka rubuta cikakken amsarka a cikin Harshen Hausa kawai."
+        )
+        context_label = "Bayani Daga Littafi"
+    else:
+        active_db = english_db
+        matched_fact = "Advise general monitoring, checking soil moisture, clearing competitive weeds, and maintaining row spacing layout protocols."
+        system_instruction = (
+            "You are an expert African agricultural advisor. "
+            "CRITICAL: Use the provided Factsheet Context to answer the user's question accurately. "
+            "Do NOT invent unrelated facts, and write your final answer ONLY in clear, concise English text."
+        )
+        context_label = "Factsheet Context"
+
     best_match_meta = None
 
-    # Check if target language index structure exists
-    if encoder is not None and lang_key in db_indices:
+    # 2. Perform Vector Search on the selected active database
+    if encoder is not None and active_db["embeddings"] is not None and len(active_db["chunks"]) > 0:
         try:
-            lang_db = db_indices[lang_key]
             query_embedding = encoder.encode(user_input, convert_to_tensor=True)
-            cos_scores = util.cos_sim(query_embedding, lang_db["embeddings"])
+            cos_scores = util.cos_sim(query_embedding, active_db["embeddings"])
             best_match_idx = int(np.argmax(cos_scores.cpu().numpy()))
             
-            matched_fact = lang_db["chunks"][best_match_idx]
-            best_match_meta = lang_db["metadata"][best_match_idx]
+            matched_fact = active_db["chunks"][best_match_idx]
+            best_match_meta = active_db["metadata"][best_match_idx]
             
-            # Cache visual reference page items
+            # Save visual parameters to Streamlit Session State for the document viewer
             st.session_state.current_page_num = best_match_meta["page_num"]
             st.session_state.current_book_name = best_match_meta["file_name"]
             
@@ -239,35 +290,19 @@ def run_ai_advisory(user_input, lang):
                     last_page=best_match_meta["page_num"]
                 )
                 if images:
-                    img_path = os.path.join(CACHE_DIR, f"rendered_page_{lang_key}.png")
-                    images[0].save(img_path, "PNG")
+                    img_path = os.path.join(CACHE_DIR, f"rendered_page_{lang.lower()}.png")
+                    images.save(img_path, "PNG")
                     st.session_state.current_page_img = img_path
         except Exception:
             pass
 
-    # Quick exit path if LLM structures are unavailable
+    # 3. Quick exit path if your local Llama-cpp model didn't load or failed
     if (not LLAMA_AVAILABLE) or (llm is None):
         prefix = "**Tabbataccen Bayani Daga Littafi:**" if lang == "Hausa" else "**Offline Semantic Match:**"
         return f"{prefix} {matched_fact}{cultural_closing}"
 
+    # 4. Generate the final AI response using your offline Qwen model
     try:
-        # Dynamic Prompt construction dependent on native dialect choice
-        if lang == "Hausa":
-            system_instruction = (
-                "Kai babban masanin shawarwarin aikin gona ne na Afirka. "
-                "HAKKI: Yi amfani da bayanan da aka bayar a ƙasa don amsa tambayar manomi daidai. "
-                "Kada ka ƙirƙiri wani abu da babu shi a cikin bayanan. "
-                "GARGADI: Dole ne ka rubuta cikakken amsarka a cikin Harshen Hausa kawai."
-            )
-            context_label = "Bayani Daga Littafi"
-        else:
-            system_instruction = (
-                "You are an expert African agricultural advisor. "
-                "CRITICAL: Use the provided Factsheet Context to answer the user's question accurately. "
-                "Do NOT invent unrelated facts, and write your final answer ONLY in clear, concise English text."
-            )
-            context_label = "Factsheet Context"
-
         prompt = (
             f"<|im_start|>system\n{system_instruction}\n{context_label}:{matched_fact}<|im_end|>\n"
             f"<|im_start|>user\n{user_input}<|im_end|>\n"
@@ -276,14 +311,14 @@ def run_ai_advisory(user_input, lang):
         
         response = llm(
             prompt,
-            max_tokens=300,
-            temperature=0.0,
-            top_p=0.1,
+            max_tokens=150,  # CPU optimized token length limit
+            temperature=0.1,
+            top_p=0.2,
             repeat_penalty=1.1,
-            stop=["<|im_end|>", "<|im_start|>", "User:", "System:", "Tambaya:"]
+            stop=["<|im_end|>", "<|im_start|>", "User:", "System:"]
         )
-        ai_response = response['choices'][0]['text'].strip()
-        ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response)
+        ai_response = response['choices']['text'].strip()
+        ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response) # Safely clean Chinese characters
         
         if len(ai_response) <= 3:
             ai_response = f"Bayanin Gona: {matched_fact}" if lang == "Hausa" else f"Farming Truth Block: {matched_fact}"
@@ -291,8 +326,7 @@ def run_ai_advisory(user_input, lang):
         return f"{ai_response}{cultural_closing}"
 
     except Exception as e:
-        st.error(f"AI Generation Error: {e}")
-        return "An samu matsala wajen sarrafa bayanin." if lang == "Hausa" else "An error occurred during generation."
+        return "An samu matsala wajen sarrafa bayanin." if lang == "Hausa" else f"An error occurred: {e}"
 
 # ========================================================
 # STREAMLIT GRAPHICAL INTERFACE
