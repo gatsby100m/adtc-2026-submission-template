@@ -167,22 +167,24 @@ def index_all_downloaded_books():
         return None, None, None
 
 # Load your split database structure globally
+# === CRITICAL RUNTIME LOOKUP INITIALIZATION ===
+# This block initializes your dual-language (English & Hausa) vector indices safely
 if encoder is not None:
-    db_indices = index_all_downloaded_books_by_lang()
+    try:
+        db_indices = index_all_downloaded_books_by_lang()
+    except Exception:
+        db_indices = {}
 else:
     db_indices = {}
-    
-    # Pre-compute layout vectors into RAM matrix
-    with st.spinner("Indexing West African Crop Knowledge Bases..."):
-        db_embeddings = encoder.encode(master_chunks, convert_to_tensor=True, show_progress_bar=False)
-        
-    return master_chunks, master_metadata, db_embeddings
 
-# Load your broad-scale database pipeline
-if encoder is not None:
-    db_chunks, db_metadata, db_embeddings = index_all_downloaded_books()
+# --- BACKWARD COMPATIBILITY FALLBACKS ---
+# Ensures older parts of your code looking for global single variables don't crash
+if "english" in db_indices:
+    db_chunks = db_indices["english"]["chunks"]
+    db_metadata = db_indices["english"]["metadata"]
+    db_embeddings = db_indices["english"]["embeddings"]
 else:
-    db_chunks, db_metadata, db_embeddings = None, None, None
+    db_chunks, db_metadata, db_embeddings = [], [], None
 
 CULTURAL_PROVERBS = [
     "Yoruba: Bí énìyàn bá șegbingbin, béèni yóò șekórè. (As we sow, so shall we reap.)",
