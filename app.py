@@ -41,13 +41,22 @@ os.makedirs(MODEL_DIR, exist_ok=True)
 os.makedirs(RAG_DIR, exist_ok=True)
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-# Mapped directly to your 5 shared Google Drive File IDs
-BOOK_DRIVE_IDS = {
-    "maize_diseases.pdf": "1lziyd4oXiiWK8zGBzz9zz12JSRlOiufy",
-    "plant_pathology_encyclopedia.pdf": "1LzwK91UP8sBZ0dgnAWgjTfX9bXKTl0zS",
-    "pest_disease_manual.pdf": "1BLWpBleJzN8icgpoyJuiwJRtgSK9Z8Rw",
-    "tomato_production_guide.pdf": "1aFo6Y57zheat6-FgwttnbBzwnHFl9EjL",
-    "bayer_tomato_disease_guide.pdf": "1ugRejJFvFKKCeTRR5jWrehYw6TUzaJZB"
+# Grouping file IDs by language for the RAG pipeline
+KNOWLEDGE_BASE = {
+    "english": {
+        "Vegetables by Bayer Tomato Disease Guide...": "1gQ29XZTsMYNS6kdA22rUG18iML6q6ZHA",
+        "Man_Maize_diseases_CIMMYT.pdf": "14U3dBZSdbJI5j07jpzj61wLh6lwxLAyD",
+        "PRODUCTION-GUIDE-ON-TOMATO.pdf": "1jokdh9e3D1UVnYm-vrC5ov3tXwgS1KsY",
+        "PestanddiseasemanualallPRAMandASHC.pdf": "1KRdC35MF1VLqgGzO3A6W5HUoaoNgDUWM",
+        "322147478-Concise-Encyclopedia-of-Plant-...": "1cJgi9eGnx35CEMFziMoE8nyEKmfHoWxi"
+    },
+    "hausa": {
+        "hausa_book_1.pdf": "PASTE_HAUSA_ID_1_HERE",
+        "hausa_book_2.pdf": "PASTE_HAUSA_ID_2_HERE",
+        "hausa_book_3.pdf": "PASTE_HAUSA_ID_3_HERE",
+        "hausa_book_4.pdf": "PASTE_HAUSA_ID_4_HERE",
+        "hausa_book_5.pdf": "PASTE_HAUSA_ID_5_HERE"
+    }
 }
 
 def ensure_books_exist():
@@ -178,45 +187,6 @@ if "input_counter" not in st.session_state: st.session_state.input_counter = 0
 if "current_page_img" not in st.session_state: st.session_state.current_page_img = None
 if "current_page_num" not in st.session_state: st.session_state.current_page_num = None
 if "current_book_name" not in st.session_state: st.session_state.current_book_name = None
-
-# =====================================================================
-# BACKGROUND SEAMLESS TRANSLATION ENGINE (NLLB-200)
-# =====================================================================
-@st.cache_resource
-def load_nllb_translator():
-    """Loads a highly optimized, lightweight 600M translator to ensure flawless Hausa output."""
-    try:
-        from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
-        # Uses standard CPU optimizations to maintain low memory utilization
-        model_name = "facebook/nllb-200-distilled-600M"
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
-        return tokenizer, model
-    except Exception:
-        return None, None
-
-nllb_tokenizer, nllb_model = load_nllb_translator()
-
-def translate_text(text_to_translate, source_lang="English", target_lang="Hausa"):
-    """Translates text bi-directionally between English and Hausa using NLLB-200."""
-    if nllb_tokenizer is None or nllb_model is None:
-        return text_to_translate
-        
-    # Map languages to standard NLLB language codes
-    code_map = {"English": "eng_Latn", "Hausa": "hau_Latn"}
-    src_code = code_map.get(source_lang, "eng_Latn")
-    tgt_code = code_map.get(target_lang, "hau_Latn")
-    
-    try:
-        from transformers import pipeline
-        # Pass language codes directly inside the translator call
-        translator = pipeline(
-            'translation', model=nllb_model, tokenizer=nllb_tokenizer, max_length=512
-        )
-        output = translator(text_to_translate, src_lang=src_code, tgt_lang=tgt_code)
-        return output[0]['translation_text']
-    except Exception:
-        return text_to_translate
 
 # =====================================================================
 # ADVANCED SEAMLESS HYBRID VECTOR RAG ENGINE
