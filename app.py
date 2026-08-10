@@ -27,13 +27,12 @@ try:
 except ImportError:
     PDF_LIBS_AVAILABLE = False
 
-# =====================================================================
+#=====================================================================
 # DIRECTORIES & AUTO-DOWNLOAD CONFIGURATION
-# =====================================================================
+#=====================================================================
 MODEL_DIR = "models"
 MODEL_NAME = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
 MODEL_PATH = os.path.join(MODEL_DIR, MODEL_NAME)
-
 RAG_DIR = "rag_data"
 CACHE_DIR = "page_cache"
 
@@ -44,19 +43,19 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 # Grouping file IDs by language for the RAG pipeline
 KNOWLEDGE_BASE = {
     "english": {
-        "Vegetables by Bayer Tomato Disease Guide...": "1gQ29XZTsMYNS6kdA22rUG18iML6q6ZHA",
+        "VegetablesbyBayerTomatoDiseaseGuide...": "1gQ29XZTsMYNS6kdA22rUG18iML6q6ZHA",
         "Man_Maize_diseases_CIMMYT.pdf": "14U3dBZSdbJI5j07jpzj61wLh6lwxLAyD",
         "PRODUCTION-GUIDE-ON-TOMATO.pdf": "1jokdh9e3D1UVnYm-vrC5ov3tXwgS1KsY",
         "PestanddiseasemanualallPRAMandASHC.pdf": "1KRdC35MF1VLqgGzO3A6W5HUoaoNgDUWM",
         "322147478-Concise-Encyclopedia-of-Plant-...": "1cJgi9eGnx35CEMFziMoE8nyEKmfHoWxi"
-   },
-   "hausa": {
-       "Vegetables by Bayer Tomato Disease Guide...": "1gQ29XZTsMYNS6kdA22rUG18iML6q6ZHA",
-       "Man_Maize_diseases_CIMMYT.pdf": "14U3dBZSdbJI5j07jpzj61wLh6lwxLAyD",
-       "PRODUCTION-GUIDE-ON-TOMATO.pdf": "1jokdh9e3D1UVnYm-vrC5ov3tXwgS1KsY",
-       "PestanddiseasemanualallPRAMandASHC.pdf": "1KRdC35MF1VLqgGzO3A6W5HUoaoNgDUWM",
-       "322147478-Concise-Encyclopedia-of-Plant-...": "1cJgi9eGnx35CEMFziMoE8nyEKmfHoWxi"
-   } 
+    },
+    "hausa": {
+        "VegetablesbyBayerTomatoDiseaseGuide...": "1gQ29XZTsMYNS6kdA22rUG18iML6q6ZHA",
+        "Man_Maize_diseases_CIMMYT.pdf": "14U3dBZSdbJI5j07jpzj61wLh6lwxLAyD",
+        "PRODUCTION-GUIDE-ON-TOMATO.pdf": "1jokdh9e3D1UVnYm-vrC5ov3tXwgS1KsY",
+        "PestanddiseasemanualallPRAMandASHC.pdf": "1KRdC35MF1VLqgGzO3A6W5HUoaoNgDUWM",
+        "322147478-Concise-Encyclopedia-of-Plant-...": "1cJgi9eGnx35CEMFziMoE8nyEKmfHoWxi"
+    }
 }
 
 def ensure_books_exist():
@@ -66,17 +65,13 @@ def ensure_books_exist():
     except ImportError:
         os.system("pip install gdown")
         import gdown
-
-    # Loop dynamically through your language groups
+        
     for lang, books in KNOWLEDGE_BASE.items():
         lang_dir = os.path.join(RAG_DIR, lang)
         os.makedirs(lang_dir, exist_ok=True)
-        
         for filename, file_id in books.items():
-            # Skip placeholders if you haven't swapped out the IDs yet
             if "PASTE_HAUSA_ID" in file_id:
                 continue
-                
             destination_path = os.path.join(lang_dir, filename)
             if not os.path.exists(destination_path):
                 with st.spinner(f"Downloading {filename} ({lang}) from Google Drive... Please wait."):
@@ -88,25 +83,46 @@ def ensure_books_exist():
 # Run background textbook loader immediately
 ensure_books_exist()
 
-# =====================================================================
+#=====================================================================
+# FIXED: INITIALIZE MISSING GLOBAL LLM AND ENCODER MODELS
+#=====================================================================
+@st.cache_resource
+def load_ai_models():
+    """Safely instantiates embedding structures and local quantized model cores."""
+    loaded_encoder = None
+    loaded_llm = None
+    
+    if TRANSFORMERS_AVAILABLE:
+        try:
+            loaded_encoder = SentenceTransformer("all-MiniLM-L6-v2")
+        except Exception:
+            pass
+            
+    if LLAMA_AVAILABLE and os.path.exists(MODEL_PATH):
+        try:
+            loaded_llm = Llama(model_path=MODEL_PATH, n_ctx=2048, verbose=False)
+        except Exception:
+            pass
+    return loaded_encoder, loaded_llm
+
+# Unpack models globally so all referencing functions can access them without NameErrors
+encoder, llm = load_ai_models()
+
+#=====================================================================
 # CORE RESOURCE INITIALIZATION CORE (Optimized for 8GB RAM / HF Spaces)
-# =====================================================================
+#=====================================================================
 @st.cache_resource
 def index_all_downloaded_books_by_lang():
     """Loops through all downloaded PDFs partitioned by language subfolders."""
-    if not TRANSFORMERS_AVAILABLE or not PDF_LIBS_AVAILABLE:
+    if not TRANSFORMERS_AVAILABLE or not PDF_LIBS_AVAILABLE or encoder is None:
         return {}
-
     lang_indices = {}
-
     for lang in ["english", "hausa"]:
         lang_dir = os.path.join(RAG_DIR, lang)
         if not os.path.exists(lang_dir):
             continue
-
         master_chunks = []
         master_metadata = []
-
         for filename in os.listdir(lang_dir):
             if filename.endswith(".pdf"):
                 file_path = os.path.join(lang_dir, filename)
@@ -123,7 +139,6 @@ def index_all_downloaded_books_by_lang():
                             })
                 except Exception:
                     continue
-
         if master_chunks:
             with st.spinner(f"Indexing West African Crop Knowledge Bases ({lang.upper()})..."):
                 db_embeddings = encoder.encode(master_chunks, convert_to_tensor=True, show_progress_bar=False)
@@ -134,22 +149,17 @@ def index_all_downloaded_books_by_lang():
                 }
     return lang_indices
 
-# =====================================================================
-# ADVANCED MULTI-BOOK EXTRACTION ENGINE
-# =====================================================================
-# =========================================================================
+#=========================================================================
 # 1. DEDICATED ENGLISH INDEX PIPELINE
-# =========================================================================
+#=========================================================================
 @st.cache_resource
 def index_english_library():
     """Independent engine that ONLY extracts and indexes English PDFs."""
     if not TRANSFORMERS_AVAILABLE or not PDF_LIBS_AVAILABLE or encoder is None:
         return {"chunks": [], "metadata": [], "embeddings": None}
-        
     english_dir = os.path.join(RAG_DIR, "english")
     if not os.path.exists(english_dir):
         return {"chunks": [], "metadata": [], "embeddings": None}
-
     chunks, metadata = [], []
     for filename in os.listdir(english_dir):
         if filename.endswith(".pdf"):
@@ -163,7 +173,6 @@ def index_english_library():
                         metadata.append({"file_name": filename, "file_path": file_path, "page_num": idx + 1})
             except Exception:
                 continue
-
     if chunks:
         try:
             embeddings = encoder.encode(chunks, convert_to_tensor=True, show_progress_bar=False)
@@ -172,20 +181,17 @@ def index_english_library():
             return {"chunks": [], "metadata": [], "embeddings": None}
     return {"chunks": [], "metadata": [], "embeddings": None}
 
-
-# =========================================================================
+#=========================================================================
 # 2. DEDICATED HAUSA INDEX PIPELINE
-# =========================================================================
+#=========================================================================
 @st.cache_resource
 def index_hausa_library():
     """Independent engine that ONLY extracts and indexes Hausa PDFs."""
     if not TRANSFORMERS_AVAILABLE or not PDF_LIBS_AVAILABLE or encoder is None:
         return {"chunks": [], "metadata": [], "embeddings": None}
-        
     hausa_dir = os.path.join(RAG_DIR, "hausa")
     if not os.path.exists(hausa_dir):
         return {"chunks": [], "metadata": [], "embeddings": None}
-
     chunks, metadata = [], []
     for filename in os.listdir(hausa_dir):
         if filename.endswith(".pdf"):
@@ -199,7 +205,6 @@ def index_hausa_library():
                         metadata.append({"file_name": filename, "file_path": file_path, "page_num": idx + 1})
             except Exception:
                 continue
-
     if chunks:
         try:
             embeddings = encoder.encode(chunks, convert_to_tensor=True, show_progress_bar=False)
@@ -208,14 +213,12 @@ def index_hausa_library():
             return {"chunks": [], "metadata": [], "embeddings": None}
     return {"chunks": [], "metadata": [], "embeddings": None}
 
-# =========================================================================
+#=========================================================================
 # 3. RUNTIME INITIALIZATION & BACKWARD COMPATIBILITY
-# =========================================================================
-# Initialize both libraries independently
+#=========================================================================
 english_db = index_english_library()
 hausa_db = index_hausa_library()
 
-# Map back to old variables so other parts of your code don't throw NameErrors
 db_chunks = english_db["chunks"]
 db_metadata = english_db["metadata"]
 db_embeddings = english_db["embeddings"]
@@ -224,149 +227,56 @@ CULTURAL_PROVERBS = [
     "Yoruba: Bí énìyàn bá șegbingbin, béèni yóò șekórè. (As we sow, so shall we reap.)",
     "Hausa: Mai hakuri yukan dafa dutse har ya sha romonsa. (The patient farmer cooks a stone and drinks its soup.)",
     "Swahili: Mvumilivu hula mbivu. (A patient person eats ripe fruit.)",
-    "Igbo: Onye gba mbo na ubi, owuwe ihe ubi ga-asacha anya mmiri ya. (He who labors in the field will have his tears wiped by the harvest.)"
+    "Igbo: Onye gbambo na ubi, owuwe ihe ubi ga-asacha anya mmiri ya. (He who labors in the field will have his tears wiped by the harvest.)"
 ]
 
-# Initialize Granular Farm Ledger States
-if "revenue" not in st.session_state: st.session_state.revenue = 0.0
-if "labour_cost" not in st.session_state: st.session_state.labour_cost = 0.0
-if "fertilizer_cost" not in st.session_state: st.session_state.fertilizer_cost = 0.0
-if "equipment_cost" not in st.session_state: st.session_state.equipment_cost = 0.0
-if "other_expenses" not in st.session_state: st.session_state.other_expenses = 0.0
-if "input_counter" not in st.session_state: st.session_state.input_counter = 0
-
-# Track selected pages across columns dynamically
-if "current_page_img" not in st.session_state: st.session_state.current_page_img = None
-if "current_page_num" not in st.session_state: st.session_state.current_page_num = None
-if "current_book_name" not in st.session_state: st.session_state.current_book_name = None
-
-# =====================================================================
-# ADVANCED SEAMLESS HYBRID VECTOR RAG ENGINE
-# =====================================================================
-def run_ai_advisory(user_input, lang):
-    cultural_closing = "\n\n*Allah ya ba da amfanin gona mai albarka! Mandani na gari!*" if lang == "Hausa" else "\n\n*May your harvest be heavy and rewarding!*"
-    
-    # 1. Select the correct independent database block and baseline fallback texts
-    if lang == "Hausa":
-        active_db = hausa_db
-        matched_fact = "Bincika damshin ƙasa, cire ciyayi, da kiyaye tazarar shuka."
-        system_instruction = (
-            "Kai babban masanin shawarwarin aikin gona ne na Afirka. "
-            "HAKKI: Yi amfani da bayanan da aka bayar a ƙasa don amsa tambayar manomi daidai. "
-            "Kada ka ƙirƙiri wani abu da babu shi a cikin bayanan. "
-            "GARGADI: Dole ne ka rubuta cikakken amsarka a cikin Harshen Hausa kawai."
-        )
-        context_label = "Bayani Daga Littafi"
-    else:
-        active_db = english_db
-        matched_fact = "Advise general monitoring, checking soil moisture, clearing competitive weeds, and maintaining row spacing layout protocols."
-        system_instruction = (
-            "You are an expert African agricultural advisor. "
-            "CRITICAL: Use the provided Factsheet Context to answer the user's question accurately. "
-            "Do NOT invent unrelated facts, and write your final answer ONLY in clear, concise English text."
-        )
-        context_label = "Factsheet Context"
-
-    best_match_meta = None
-
-    # 2. Perform Vector Search on the selected active database
-    if encoder is not None and active_db["embeddings"] is not None and len(active_db["chunks"]) > 0:
-        try:
-            query_embedding = encoder.encode(user_input, convert_to_tensor=True)
-            cos_scores = util.cos_sim(query_embedding, active_db["embeddings"])
-            best_match_idx = int(np.argmax(cos_scores.cpu().numpy()))
-            
-            matched_fact = active_db["chunks"][best_match_idx]
-            best_match_meta = active_db["metadata"][best_match_idx]
-            
-            # Save visual parameters to Streamlit Session State for the document viewer
-            st.session_state.current_page_num = best_match_meta["page_num"]
-            st.session_state.current_book_name = best_match_meta["file_name"]
-            
-            if PDF_LIBS_AVAILABLE:
-                images = convert_from_path(
-                    best_match_meta["file_path"],
-                    first_page=best_match_meta["page_num"],
-                    last_page=best_match_meta["page_num"]
-                )
-                if images:
-                    img_path = os.path.join(CACHE_DIR, f"rendered_page_{lang.lower()}.png")
-                    images.save(img_path, "PNG")
-                    st.session_state.current_page_img = img_path
-        except Exception:
-            pass
-
-    # 3. Quick exit path if your local Llama-cpp model didn't load or failed
-    if (not LLAMA_AVAILABLE) or (llm is None):
-        prefix = "**Tabbataccen Bayani Daga Littafi:**" if lang == "Hausa" else "**Offline Semantic Match:**"
-        return f"{prefix} {matched_fact}{cultural_closing}"
-
-    # 4. Generate the final AI response using your offline Qwen model
-    try:
-        prompt = (
-            f"<|im_start|>system\n{system_instruction}\n{context_label}:{matched_fact}<|im_end|>\n"
-            f"<|im_start|>user\n{user_input}<|im_end|>\n"
-            f"<|im_start|>assistant\n"
-        )
-        
-        response = llm(
-            prompt,
-            max_tokens=150,  # CPU optimized token length limit
-            temperature=0.1,
-            top_p=0.2,
-            repeat_penalty=1.1,
-            stop=["<|im_end|>", "<|im_start|>", "User:", "System:"]
-        )
-        ai_response = response['choices']['text'].strip()
-        ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response) # Safely clean Chinese characters
-        
-        if len(ai_response) <= 3:
-            ai_response = f"Bayanin Gona: {matched_fact}" if lang == "Hausa" else f"Farming Truth Block: {matched_fact}"
-        
-        return f"{ai_response}{cultural_closing}"
-
-    except Exception as e:
-        return "An samu matsala wajen sarrafa bayanin." if lang == "Hausa" else f"An error occurred: {e}"
-
-# ========================================================
-# STREAMLIT GRAPHICAL INTERFACE
-# ========================================================
+#=====================================================================
+# STREAMLIT GRAPHICAL INTERFACE (Part 2)
+#=====================================================================
+# Added missing tab keys to avoid blank headers or rendering errors
 LANG_DICT = {
-     "English": {
-         "title": "🌾 Smart Farm Assistant",
-         "subtitle": "AI-Powered West African Crop Advisor & Ledger Engine",
-         "proverb_title": "💡 Cultural Farm Wisdom",
-         "submit_btn": "Analyze Symptoms",
-         "crop_select": "Select Your Crop Type:",
-         "date_input": "Select Planting Date:",
-         "calc_btn": "Calculate Crop Timeline",
-         "ledger_input": "Type transaction details (e.g., 'Sold maize for 50000 Naira'):",
-         "log_btn": "Log Transaction Automatically"
-     },
-     "Hausa": {
-         "title": "🌾 Mataimakin Manomi na AI",
-         "subtitle": "Kwamfutar Shawarwari da Jagorancin Kudaden Gona",
-         "proverb_title": "💡 Karin Maganar Manoma",
-         "submit_btn": "Bincika Alamomi",
-         "crop_select": "Zabi Irin Amfanin Gona:",
-         "date_input": "Zabi Ranar Shuka:",
-         "calc_btn": "Lissafta Lokacin Gona",
-         "ledger_input": "Rubuta bayanin kudi (misali, 'An sayar da masara kudin Naira 50000'):",
-         "log_btn": "Shigar da Bayanin Kudi"
+    "English": {
+        "title": " SmartFarmAssistant",
+        "subtitle": "AI-Powered West African Crop Advisor & Ledger Engine",
+        "proverb_title": " Cultural Farm Wisdom",
+        "submit_btn": "Analyze Symptoms",
+        "crop_select": "Select Your Crop Type:",
+        "date_input": "Select Planting Date:",
+        "calc_btn": "Calculate Crop Timeline",
+        "ledger_input": "Type transaction details (e.g., 'Sold maize for 50000 Naira'):",
+        "log_btn": "Log Transaction Automatically",
+        "diagnose_tab": "AI Advisor",
+        "calendar_tab": "Timeline Calculator",
+        "finance_tab": "Financial Ledger",
+        "text_input_label": "Describe crop symptoms:"
+    },
+    "Hausa": {
+        "title": " Mataimakin Manomi na AI",
+        "subtitle": "Kwamfutar Shawarwari da Jagorancin Kudaden Gona",
+        "proverb_title": " Karin Maganar Manoma",
+        "submit_btn": "Bincika Alamomi",
+        "crop_select": "Zabi Irin Amfanin Gona:",
+        "date_input": "Zabi Ranar Shuka:",
+        "calc_btn": "Lissafta Lokacin Gona",
+        "ledger_input": "Rubuta bayanin kudi (misali, 'An sayar da masara kudin Naira 50000'):",
+        "log_btn": "Shigarda Bayanin Kudi",
+        "diagnose_tab": "Mataimakin AI",
+        "calendar_tab": "Kalandar Gona",
+        "finance_tab": "Littafin Kudi",
+        "text_input_label": "Yi bayanin alamun rashin lafiyar amfanin gona:"
     }
 }
-#st.set_page_config(page_title="SmartFarmAssistant", layout="wide")
 
 if llm is None:
     st.warning("Application running in fallback lookup mode. AI vector features require active weights storage paths.")
 else:
-    st.success("AI Core, Multilingual Vector Map, and NLLB Translation Engine loaded successfully!")
+    st.success("AI Core, Multilingual Vector Map, and Local LLM Engine loaded successfully!")
 
 col_lang, col_prov = st.columns(2)
 with col_lang:
     selected_lang = st.selectbox("Language / Yare", ["English", "Hausa"])
     labels = LANG_DICT[selected_lang]
-
+    
 with col_prov:
     prov_idx = int(time.time() // 10) % len(CULTURAL_PROVERBS)
     st.info(f"**{labels['proverb_title']}**\n{CULTURAL_PROVERBS[prov_idx]}")
@@ -375,67 +285,58 @@ st.title(labels["title"])
 st.subheader(labels["subtitle"])
 
 def calculate_crop_timeline(crop, planting_date):
-    """Calculates general growth milestone durations for standard West African crops."""
     try:
-        import datetime
         if crop == "Maize":
             germination = planting_date + datetime.timedelta(days=5)
             flowering = planting_date + datetime.timedelta(days=55)
             harvest = planting_date + datetime.timedelta(days=110)
-            return (f"🌱 Germination Expected: {germination.strftime('%B %d, %Y')}\n"
-                    f"🌽 Flowering/Tasseling Stage: {flowering.strftime('%B %d, %Y')}\n"
-                    f"🧺 Harvest Readiness Target: {harvest.strftime('%B %d, %Y')}")
+            return (f" Germination Expected: {germination.strftime('%B %d, %Y')}\n"
+                    f" Flowering/Tasseling Stage: {flowering.strftime('%B %d, %Y')}\n"
+                    f" Harvest Readiness Target: {harvest.strftime('%B %d, %Y')}")
         elif crop == "Cassava":
             root_initiation = planting_date + datetime.timedelta(days=30)
             canopy_closure = planting_date + datetime.timedelta(days=90)
             harvest = planting_date + datetime.timedelta(days=300)
-            return (f"🌱 Root Initiation Phase: {root_initiation.strftime('%B %d, %Y')}\n"
-                    f"🌿 Full Canopy Development: {canopy_closure.strftime('%B %d, %Y')}\n"
-                    f"🧺 Harvest Readiness Target: {harvest.strftime('%B %d, %Y')}")
+            return (f" Root Initiation Phase: {root_initiation.strftime('%B %d, %Y')}\n"
+                    f" Full Canopy Development: {canopy_closure.strftime('%B %d, %Y')}\n"
+                    f" Harvest Readiness Target: {harvest.strftime('%B %d, %Y')}")
     except Exception as e:
         return f"Timeline calculator error: {e}"
-        
-# Place it directly below calculate_crop_timeline and above the st.tabs line:
+
 def parse_financial_statement(statement_text):
-    """Fallback standard NLP regex parsing engine to extract farm financial updates."""
     text_lower = statement_text.lower()
     numbers = [float(s) for s in re.findall(r'\d+', text_lower)]
-    amount = numbers if numbers else 0.0
-    
+    amount = numbers[0] if numbers else 0.0
     if "sold" in text_lower or "sayar" in text_lower or "revenue" in text_lower:
         st.session_state.revenue += amount
-        return f"📈 Automatically identified a sale! Logged +{amount:,.2f} Naira to Revenue."
+        return f" Automatically identified a sale! Logged +{amount:,.2f} Naira to Revenue."
     elif "labour" in text_lower or "lebur" in text_lower or "worker" in text_lower:
         st.session_state.labour_cost += amount
-        return f"📉 Logged -{amount:,.2f} Naira to Labour Costs."
+        return f" Logged -{amount:,.2f} Naira to Labour Costs."
     elif "fertilizer" in text_lower or "taki" in text_lower or "chemical" in text_lower:
         st.session_state.fertilizer_cost += amount
-        return f"📉 Logged -{amount:,.2f} Naira to Fertilizer Costs."
+        return f" Logged -{amount:,.2f} Naira to Fertilizer Costs."
     elif "rent" in text_lower or "tractor" in text_lower or "kayan aiki" in text_lower:
         st.session_state.equipment_cost += amount
-        return f"📉 Logged -{amount:,.2f} Naira to Equipment Costs."
+        return f" Logged -{amount:,.2f} Naira to Equipment Costs."
     else:
         st.session_state.other_expenses += amount
-        return f"📝 Categorized generic ledger transaction entry: -{amount:,.2f} Naira logged."
+        return f" Categorized generic ledger transaction entry: -{amount:,.2f} Naira logged."
 
 tab1, tab2, tab3 = st.tabs([
-    labels.get("diagnose_tab", "AI Advisor"),
-    labels.get("calendar_tab", "Timeline Calculator"),
-    labels.get("finance_tab", "Financial Ledger")
+    labels.get("diagnose_tab"),
+    labels.get("calendar_tab"),
+    labels.get("finance_tab")
 ])
 
 # --- TAB 1: AI ADVISOR & SYMPTOM INPUTS ---
 with tab1:
-    # Split space dynamically to display text/audio chats on left and book pages on right
     col_chat, col_viewer = st.columns([1.1, 0.9])
-    
     with col_chat:
-        st.markdown(f"### {labels.get('diagnose_tab', 'AI Advisor Workspace')}")
-        
+        st.markdown(f"### {labels.get('diagnose_tab')}")
         text_key = f"text_symptom_{st.session_state.get('input_counter', 0)}"
         audio_key = f"audio_symptom_{st.session_state.get('input_counter', 0)}"
-        
-        user_text = st.text_input(labels.get("text_input_label", "Describe crop symptoms:"), key=text_key)
+        user_text = st.text_input(labels.get("text_input_label"), key=text_key)
         
         col_aud1, col_aud2 = st.columns(2)
         with col_aud1:
@@ -456,15 +357,14 @@ with tab1:
                 if user_text:
                     with st.spinner("Processing analysis..."):
                         result = run_ai_advisory(user_text, selected_lang)
-                    st.write(result)
+                        st.write(result)
                 elif user_audio is not None:
                     st.info("Audio received locally. (Audio processing engine pipeline placeholder)")
                     with st.spinner("Processing analysis..."):
                         result = run_ai_advisory("spots", selected_lang)
-                    st.write(result)
+                        st.write(result)
                 else:
                     st.warning("Please provide either text or audio input first.")
-                    
         with col_btn2:
             if st.button("Delete & Clear Inputs / Goge Bayanai", key="clear_inputs_btn"):
                 st.session_state.input_counter += 1
@@ -474,25 +374,22 @@ with tab1:
                 st.rerun()
 
     with col_viewer:
-        # Dynamic Encyclopedia Document Viewer Column frame
-        viewer_title = "📖 Encyclopedia Reference Viewer" if selected_lang == "English" else "📖 Hoton Littafin Encyclopedia"
+        viewer_title = " Encyclopedia Reference Viewer" if selected_lang == "English" else " Hoton Littafin Encyclopedia"
         st.markdown(f"### {viewer_title}")
-        
         if st.session_state.current_page_img and os.path.exists(st.session_state.current_page_img):
-            # Text-only flag bypass condition routing check
             if "pest_disease_africa.pdf" in st.session_state.get("current_book_name", ""):
                 info_msg = (
-                    f"📖 Matched Text Source: **Pests and Diseases of Tropical Crops** (Page {st.session_state.current_page_num})"
+                    f" Matched Text Source: **Pests and Diseases of Tropical Crops** (Page {st.session_state.current_page_num})"
                     if selected_lang == "English" else
-                    f"📖 Bayani daga littafin: **Pests and Diseases of Tropical Crops** (Shafi na {st.session_state.current_page_num})"
+                    f" Bayani daga littafi: **Pests and Diseases of Tropical Crops** (Shafi na {st.session_state.current_page_num})"
                 )
                 st.info(info_msg)
                 st.caption("This source is optimized as text-only reference data columns inside your RAM profile.")
             else:
                 success_msg = (
-                    f"🎯 Displaying relevant page {st.session_state.current_page_num} from `{st.session_state.current_book_name}`"
+                    f" Displaying relevant page {st.session_state.current_page_num} from `{st.session_state.current_book_name}`"
                     if selected_lang == "English" else
-                    f"🎯 An nuna Shafi na {st.session_state.current_page_num} daga `{st.session_state.current_book_name}`"
+                    f" An nuna Shafi na {st.session_state.current_page_num} daga `{st.session_state.current_book_name}`"
                 )
                 st.success(success_msg)
                 st.image(st.session_state.current_page_img, use_container_width=True)
@@ -500,7 +397,7 @@ with tab1:
             default_info = (
                 "When you search for crop symptoms, the authentic visual textbook page matching your diagnosis will render here instantly completely offline."
                 if selected_lang == "English" else
-                "Bincika alamomin cututtuka zai nuna muku ainihin shafin littafin aikin gona tare da hotuna ko jadawali a nan ba tare da internet ba."
+                "Bincika alamomin cututtuka zai nuna muku aihin shafin littafin aikin gona tare da hotuna ko jadawali a nan ba tare da internet ba."
             )
             st.info(default_info)
 
@@ -527,104 +424,7 @@ with tab3:
             
     st.markdown("---")
     col_in1, col_in2 = st.columns(2)
-    
     with col_in1:
         sale_input = st.number_input("Crop Sales Revenue (Naira):", min_value=0.0, step=500.0, key="sale_in")
         if st.button("Add to Sales / Kara Kudin Sayarwa", key="tab3_add_sales_btn"):
             st.session_state.revenue += sale_input
-            st.success(f"Added +{sale_input:,.2f} Naira to Sales!")
-            st.rerun()
-            
-        labour_input = st.number_input("Labour & Worker Cost (Naira):", min_value=0.0, step=500.0, key="labour_in")
-        if st.button("Add to Labour / Kara Kudin Lebur", key="tab3_add_labour_btn"):
-            st.session_state.labour_cost += labour_input
-            st.success(f"Added -{labour_input:,.2f} Naira to Labour!")
-            st.rerun()
-            
-    with col_in2:
-        fert_input = st.number_input("Fertilizer & Chemicals Cost (Naira):", min_value=0.0, step=500.0, key="fert_in")
-        if st.button("Add to Fertilizer / Kara Kudin Taki", key="tab3_add_fert_btn"):
-            st.session_state.fertilizer_cost += fert_input
-            st.success(f"Added -{fert_input:,.2f} Naira to Fertilizer!")
-            st.rerun()
-            
-        equip_input = st.number_input("Equipment & Tractor Rental (Naira):", min_value=0.0, step=500.0, key="equip_in")
-        if st.button("Add to Equipment / Kara Kudin KayanAiki", key="tab3_add_equip_btn"):
-            st.session_state.equipment_cost += equip_input
-            st.success(f"Added -{equip_input:,.2f} Naira to Equipment!")
-            
-    st.markdown("---")
-    st.markdown("### Farm Profit & Loss Summary / Bayanin Riba da Asara")
-    
-    total_costs = (
-        st.session_state.labour_cost +
-        st.session_state.fertilizer_cost +
-        st.session_state.equipment_cost +
-        st.session_state.other_expenses
-    )
-    net_profit = st.session_state.revenue - total_costs
-    
-    st.metric("Total Sales Revenue / Kudin Sayarwa (+)", f"{st.session_state.revenue:,.2f} Naira")
-    
-    col_metrics1, col_metrics2 = st.columns(2)
-    with col_metrics1:
-        st.metric("Labour Costs / Kudin Lebur (-)", f"{st.session_state.labour_cost:,.2f} Naira")
-        st.metric("Fertilizer & Chemicals / Kudin Taki (-)", f"{st.session_state.fertilizer_cost:,.2f} Naira")
-    with col_metrics2:
-        st.metric("Equipment & Tractor / KayanAiki (-)", f"{st.session_state.equipment_cost:,.2f} Naira")
-        st.metric("Other Expenses / Kudaden Fitarwa (-)", f"{st.session_state.other_expenses:,.2f} Naira")
-        
-    st.markdown("---")
-    if net_profit >= 0:
-        st.success(f"**Net Profit / Riba Ta Tabbata:** {net_profit:,.2f} Naira")
-    else:
-        st.error(f"**Net Operating Loss / Asara Ta Fito:** {abs(net_profit):,.2f} Naira")
-        
-    if st.button("Reset Ledger / Goge Dukan Bayanan Kudi", type="secondary", key="tab3_reset_ledger_btn"):
-        st.session_state.revenue = 0.0
-        st.session_state.labour_cost = 0.0
-        st.session_state.fertilizer_cost = 0.0
-        st.session_state.equipment_cost = 0.0
-        st.session_state.other_expenses = 0.0
-        st.success("Ledger cleared successfully!")
-        st.rerun()
-        
-    st.markdown("---")
-    st.subheader("Save Records Locally")
-    
-    current_ledger_data = {
-        "Revenue": [st.session_state.get('revenue', 0.0)],
-        "LabourCost": [st.session_state.get('labour_cost', 0.0)],
-        "FertilizerCost": [st.session_state.get('fertilizer_cost', 0.0)],
-        "EquipmentCost": [st.session_state.get('equipment_cost', 0.0)],
-        "OtherExpenses": [st.session_state.get('other_expenses', 0.0)]
-    }
-    
-    if st.button("Save Ledger to Laptop", key="save_ledger_tab3_btn"):
-        try:
-            import pandas as pd
-            df = pd.DataFrame(current_ledger_data)
-            file_name = "ledger_backup.csv"
-            df.to_csv(file_name, index=False)
-            absolute_path = os.path.abspath(file_name)
-            st.success(f"Saved successfully to your laptop at:\n`{absolute_path}`")
-        except Exception as e:
-            st.error(f"Failed to save: {e}")
-            
-    st.markdown("---")
-    st.subheader("Download Ledger File")
-    st.write("Download the current ledger data directly through your web browser.")
-    
-    try:
-        import pandas as pd
-        df = pd.DataFrame(current_ledger_data)
-        csv_data = df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="⬇ Download Ledger as CSV",
-            data=csv_data,
-            file_name="ledger_download.csv",
-            mime="text/csv",
-            key="download_ledger_tab3_btn"
-        )
-    except Exception as download_error:
-        st.info("Please fill in or save your ledger data above to enable downloading.")
