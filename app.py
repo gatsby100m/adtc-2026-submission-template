@@ -134,12 +134,6 @@ def index_all_downloaded_books_by_lang():
                 }
     return lang_indices
 
-# Load your split database structure globally
-if encoder is not None:
-    db_indices = index_all_downloaded_books_by_lang()
-else:
-    db_indices = {}
-
 # =====================================================================
 # ADVANCED MULTI-BOOK EXTRACTION ENGINE
 # =====================================================================
@@ -171,7 +165,13 @@ def index_all_downloaded_books():
                 
     if not master_chunks:
         return None, None, None
-        
+
+# Load your split database structure globally
+if encoder is not None:
+    db_indices = index_all_downloaded_books_by_lang()
+else:
+    db_indices = {}
+    
     # Pre-compute layout vectors into RAM matrix
     with st.spinner("Indexing West African Crop Knowledge Bases..."):
         db_embeddings = encoder.encode(master_chunks, convert_to_tensor=True, show_progress_bar=False)
