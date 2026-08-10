@@ -49,14 +49,14 @@ KNOWLEDGE_BASE = {
         "PRODUCTION-GUIDE-ON-TOMATO.pdf": "1jokdh9e3D1UVnYm-vrC5ov3tXwgS1KsY",
         "PestanddiseasemanualallPRAMandASHC.pdf": "1KRdC35MF1VLqgGzO3A6W5HUoaoNgDUWM",
         "322147478-Concise-Encyclopedia-of-Plant-...": "1cJgi9eGnx35CEMFziMoE8nyEKmfHoWxi"
-    },
-    "hausa": {
-        "hausa_book_1.pdf": "PASTE_HAUSA_ID_1_HERE",
-        "hausa_book_2.pdf": "PASTE_HAUSA_ID_2_HERE",
-        "hausa_book_3.pdf": "PASTE_HAUSA_ID_3_HERE",
-        "hausa_book_4.pdf": "PASTE_HAUSA_ID_4_HERE",
-        "hausa_book_5.pdf": "PASTE_HAUSA_ID_5_HERE"
-    }
+   },
+   "hausa": {
+       "Vegetables by Bayer Tomato Disease Guide...": "1gQ29XZTsMYNS6kdA22rUG18iML6q6ZHA",
+       "Man_Maize_diseases_CIMMYT.pdf": "14U3dBZSdbJI5j07jpzj61wLh6lwxLAyD",
+       "PRODUCTION-GUIDE-ON-TOMATO.pdf": "1jokdh9e3D1UVnYm-vrC5ov3tXwgS1KsY",
+       "PestanddiseasemanualallPRAMandASHC.pdf": "1KRdC35MF1VLqgGzO3A6W5HUoaoNgDUWM",
+       "322147478-Concise-Encyclopedia-of-Plant-...": "1cJgi9eGnx35CEMFziMoE8nyEKmfHoWxi"
+   } 
 }
 
 def ensure_books_exist():
