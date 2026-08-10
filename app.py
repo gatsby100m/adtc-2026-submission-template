@@ -60,24 +60,30 @@ KNOWLEDGE_BASE = {
 }
 
 def ensure_books_exist():
-    """Checks data directory and auto-downloads your Google Drive textbooks using gdown."""
+    """Checks data directory and auto-downloads your Google Drive textbooks using gdown into subfolders."""
     try:
         import gdown
     except ImportError:
         os.system("pip install gdown")
         import gdown
 
-    for filename, file_id in BOOK_DRIVE_IDS.items():
-        destination_path = os.path.join(RAG_DIR, filename)
-        if not os.path.exists(destination_path):
-            with st.spinner(f"Downloading {filename} from Google Drive... Please wait."):
-                try:
-                    gdown.download(id=file_id, output=destination_path, quiet=True)
-                except Exception as e:
-                    st.error(f"Could not auto-download {filename}. Error: {e}")
-
-# Run background textbook loader immediately
-ensure_books_exist()
+    # Loop dynamically through your language groups
+    for lang, books in KNOWLEDGE_BASE.items():
+        lang_dir = os.path.join(RAG_DIR, lang)
+        os.makedirs(lang_dir, exist_ok=True)
+        
+        for filename, file_id in books.items():
+            # Skip placeholders if you haven't swapped out the IDs yet
+            if "PASTE_HAUSA_ID" in file_id:
+                continue
+                
+            destination_path = os.path.join(lang_dir, filename)
+            if not os.path.exists(destination_path):
+                with st.spinner(f"Downloading {filename} ({lang}) from Google Drive... Please wait."):
+                    try:
+                        gdown.download(id=file_id, output=destination_path, quiet=True)
+                    except Exception as e:
+                        st.error(f"Could not auto-download {filename}. Error: {e}")
 
 # Run background textbook loader immediately
 ensure_books_exist()
@@ -86,43 +92,53 @@ ensure_books_exist()
 # CORE RESOURCE INITIALIZATION CORE (Optimized for 8GB RAM / HF Spaces)
 # =====================================================================
 @st.cache_resource
-def initialize_offline_cores():
-    llm_instance = None
-    bi_encoder = None
-    
-    # 1. Load the Chat/Reasoning Model
-    if LLAMA_AVAILABLE:
-        if not os.path.exists(MODEL_PATH):
-            with st.spinner("Downloading Qwen2.5-0.5B-Instruct weights for the Laptop LLM Profile..."):
+def index_all_downloaded_books_by_lang():
+    """Loops through all downloaded PDFs partitioned by language subfolders."""
+    if not TRANSFORMERS_AVAILABLE or not PDF_LIBS_AVAILABLE:
+        return {}
+
+    lang_indices = {}
+
+    for lang in ["english", "hausa"]:
+        lang_dir = os.path.join(RAG_DIR, lang)
+        if not os.path.exists(lang_dir):
+            continue
+
+        master_chunks = []
+        master_metadata = []
+
+        for filename in os.listdir(lang_dir):
+            if filename.endswith(".pdf"):
+                file_path = os.path.join(lang_dir, filename)
                 try:
-                    from huggingface_hub import hf_hub_download
-                    hf_hub_download(
-                        repo_id="Qwen/Qwen2.5-0.5B-Instruct-GGUF",
-                        filename=MODEL_NAME,
-                        local_dir=MODEL_DIR,
-                        local_dir_use_symlinks=False
-                    )
-                except Exception as download_error:
-                    st.error(f"Weights transmission aborted: {str(download_error)}")
-        
-        if os.path.exists(MODEL_PATH):
-            try:
-                llm_instance = Llama(model_path=MODEL_PATH, n_ctx=2048, n_threads=4)
-            except Exception:
-                llm_instance = None
+                    reader = PdfReader(file_path)
+                    for idx, page in enumerate(reader.pages):
+                        raw_text = page.extract_text() or ""
+                        if len(raw_text.strip()) > 50:
+                            master_chunks.append(raw_text)
+                            master_metadata.append({
+                                "file_name": filename,
+                                "file_path": file_path,
+                                "page_num": idx + 1
+                            })
+                except Exception:
+                    continue
 
-    # 2. Load the Multilingual Embedding Engine
-    if TRANSFORMERS_AVAILABLE:
-        with st.spinner("Caching Semantic Multilingual RAG Map Vectors..."):
-            try:
-                # Upgraded to high-performance multilingual mapping engine
-                bi_encoder = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-            except Exception:
-                bi_encoder = None
-                
-    return llm_instance, bi_encoder
+        if master_chunks:
+            with st.spinner(f"Indexing West African Crop Knowledge Bases ({lang.upper()})..."):
+                db_embeddings = encoder.encode(master_chunks, convert_to_tensor=True, show_progress_bar=False)
+                lang_indices[lang] = {
+                    "chunks": master_chunks,
+                    "metadata": master_metadata,
+                    "embeddings": db_embeddings
+                }
+    return lang_indices
 
-llm, encoder = initialize_offline_cores()
+# Load your split database structure globally
+if encoder is not None:
+    db_indices = index_all_downloaded_books_by_lang()
+else:
+    db_indices = {}
 
 # =====================================================================
 # ADVANCED MULTI-BOOK EXTRACTION ENGINE
@@ -192,32 +208,28 @@ if "current_book_name" not in st.session_state: st.session_state.current_book_na
 # ADVANCED SEAMLESS HYBRID VECTOR RAG ENGINE
 # =====================================================================
 def run_ai_advisory(user_input, lang):
-    # Automatically convert Hausa questions to English for database lookup
-    if lang == "Hausa":
-        user_input = translate_text(user_input, source_lang="Hausa", target_lang="English")
-    
-    cultural_closing = "\n\n*May your barns overflow this season! Mandani na gari!*" if lang == "Hausa" else "\n\n*May your harvest be heavy and rewarding!*"
+    lang_key = "hausa" if lang == "Hausa" else "english"
+    cultural_closing = "\n\n*May your barns overflow thisseason! Mandani na gari!*" if lang == "Hausa" else "\n\n*May your harvest be heavy and rewarding!*"
     
     # Baseline fallback advice context parameters
-    matched_fact = "Advise general monitoring, checking soil moisture, clearing competitive weeds, and maintaining row spacing layout protocols."
+    matched_fact = "Advisegeneral monitoring, checking soil moisture, clearing competitive weeds, and maintaining row spacing layout protocols." if lang_key == "english" else "Bincika damshin ƙasa, cire ciyayi, da kiyaye tazarar shuka."
     best_match_meta = None
-    
-    # 1. Execute Multilingual Mathematical Cross-Lingual Search Indexing Matcher
-    if encoder is not None and db_embeddings is not None and db_chunks is not None:
+
+    # Check if target language index structure exists
+    if encoder is not None and lang_key in db_indices:
         try:
+            lang_db = db_indices[lang_key]
             query_embedding = encoder.encode(user_input, convert_to_tensor=True)
-            cos_scores = util.cos_sim(query_embedding, db_embeddings)
+            cos_scores = util.cos_sim(query_embedding, lang_db["embeddings"])
             best_match_idx = int(np.argmax(cos_scores.cpu().numpy()))
             
-            # Extract factual paragraph matching the target semantic coordinate query strings
-            matched_fact = db_chunks[best_match_idx]
-            best_match_meta = db_metadata[best_match_idx]
+            matched_fact = lang_db["chunks"][best_match_idx]
+            best_match_meta = lang_db["metadata"][best_match_idx]
             
-            # Cache layout parameters immediately into memory variables
+            # Cache visual reference page items
             st.session_state.current_page_num = best_match_meta["page_num"]
             st.session_state.current_book_name = best_match_meta["file_name"]
             
-            # Step A: Perform immediate visual image pipeline conversions
             if PDF_LIBS_AVAILABLE:
                 images = convert_from_path(
                     best_match_meta["file_path"],
@@ -225,77 +237,60 @@ def run_ai_advisory(user_input, lang):
                     last_page=best_match_meta["page_num"]
                 )
                 if images:
-                    img_path = os.path.join(CACHE_DIR, f"rendered_page.png")
+                    img_path = os.path.join(CACHE_DIR, f"rendered_page_{lang_key}.png")
                     images[0].save(img_path, "PNG")
                     st.session_state.current_page_img = img_path
         except Exception:
             pass
-            
+
     # Quick exit path if LLM structures are unavailable
     if (not LLAMA_AVAILABLE) or (llm is None):
-        final_text = f"**Offline Semantic Match:** {matched_fact}\n\n*(Note: Running in high-performance lookup fallback mode).*"
-        if lang == "Hausa":
-            final_text = translate_text(final_text, source_lang="English", target_lang="Hausa")
-        return f"{final_text}{cultural_closing}"
-        
+        prefix = "**Tabbataccen Bayani Daga Littafi:**" if lang == "Hausa" else "**Offline Semantic Match:**"
+        return f"{prefix} {matched_fact}{cultural_closing}"
+
     try:
-        # 2. Instruct Qwen to extract data strictly in English first to ensure reasoning alignment
-        system_instruction = (
-            "You are an expert African agricultural advisor. "
-            "CRITICAL: Use the provided Factsheet Context to answer the user's question accurately. "
-            "Elaborate on the details to sound friendly and encouraging, but your facts MUST stay completely "
-            "anchored to the factsheet context. "
-            "Do NOT invent unrelated facts, and write your final answer ONLY in clear, concise English text."
-        )
-        
+        # Dynamic Prompt construction dependent on native dialect choice
+        if lang == "Hausa":
+            system_instruction = (
+                "Kai babban masanin shawarwarin aikin gona ne na Afirka. "
+                "HAKKI: Yi amfani da bayanan da aka bayar a ƙasa don amsa tambayar manomi daidai. "
+                "Kada ka ƙirƙiri wani abu da babu shi a cikin bayanan. "
+                "GARGADI: Dole ne ka rubuta cikakken amsarka a cikin Harshen Hausa kawai."
+            )
+            context_label = "Bayani Daga Littafi"
+        else:
+            system_instruction = (
+                "You are an expert African agricultural advisor. "
+                "CRITICAL: Use the provided Factsheet Context to answer the user's question accurately. "
+                "Do NOT invent unrelated facts, and write your final answer ONLY in clear, concise English text."
+            )
+            context_label = "Factsheet Context"
+
         prompt = (
-            f"<|im_start|>system\n{system_instruction}\nFactsheetContext:{matched_fact}<|im_end|>\n"
+            f"<|im_start|>system\n{system_instruction}\n{context_label}:{matched_fact}<|im_end|>\n"
             f"<|im_start|>user\n{user_input}<|im_end|>\n"
             f"<|im_start|>assistant\n"
         )
+        
         response = llm(
             prompt,
-            max_tokens=250,
-            temperature=0.0,  # For factual extraction
+            max_tokens=300,
+            temperature=0.0,
             top_p=0.1,
             repeat_penalty=1.1,
             stop=["<|im_end|>", "<|im_start|>", "User:", "System:", "Tambaya:"]
         )
         ai_response = response['choices'][0]['text'].strip()
-        
-        import re # Keep re safe here
-        ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response)  # Clear formatting leaks
+        ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response)
         
         if len(ai_response) <= 3:
-            ai_response = f"Farming Truth Block: {matched_fact}"
-            
-        # 3. Handle Language Execution Assembly Pipeline routing paths
-        if lang == "Hausa":
-            # Translate English text output directly through NLLB to get clean Hausa
-            with st.spinner("An canza bayani zuwa Harshen Hausa... (Translating response...)"):
-                ai_response = translate_text(ai_response, source_lang="English", target_lang="Hausa")
+            ai_response = f"Bayanin Gona: {matched_fact}" if lang == "Hausa" else f"Farming Truth Block: {matched_fact}"
         
-        # Assign to final_text so the logic below works cleanly
-        final_text = ai_response
+        return f"{ai_response}{cultural_closing}"
 
     except Exception as e:
         st.error(f"AI Generation Error: {e}")
-        final_text = "An samu matsala wajen fassara bayanin."
-        
-    if lang == "Hausa" and final_text:
-        sentences = re.split(r'(?<=[.!?])\s+', final_text)
-        translated_sentences = []
-        for sentence in sentences:
-            sentence = sentence.strip()
-            if sentence:
-                try:
-                    translated_s = translate_text(sentence, src_lang="eng_Latn", tgt_lang="hau_Latn")
-                    translated_sentences.append(translated_s)
-                except Exception:
-                    translated_sentences.append(sentence)
-        final_text = " ".join(translated_sentences)
-        
-    return f"{final_text}{cultural_closing}" 
+        return "An samu matsala wajen sarrafa bayanin." if lang == "Hausa" else "An error occurred during generation."
 
 # ========================================================
 # STREAMLIT GRAPHICAL INTERFACE
