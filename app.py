@@ -219,30 +219,23 @@ if "current_book_name" not in st.session_state: st.session_state.current_book_na
 # INFERENCE INTERACTION ENGINE
 #=====================================================================
 def run_ai_advisory(user_input, lang):
-    """Processes search arrays, retrieves reference pages, and feeds parameters to the LLM context."""
-    cultural_closing = "\n\n*Allahyaba da amfanin gona mai albarka! Mandani na gari!*" if lang == "Hausa" else "\n\n*May your harvest be heavy and rewarding!*"
+    """Processes search arrays, retrieves reference pages, and runs custom prompt tracks per language."""
+    cultural_closing = "\n\n*Allahu ya bada amfanin gona mai albarka! Mandani na gari!*" if lang == "Hausa" else "\n\n*May your harvest be heavy and rewarding!*"
     
     if lang == "Hausa":
         active_db = hausa_db
         matched_fact = "Bincika damshin ƙasa, cire ciyayi, da kiyaye tazarar shuka."
-        system_instruction = (
-            "Kai babban masanin shawarwari na aikin gona ne na Afirka. "
-            "HAKKI: Yi amfani da bayanan da aka bayar a ƙasa don amsa tambayar manomi daidai. "
-            "Kada ka ƙirƙiri wani abu da babu shi a cikin bayanan. "
-            "GARGADI: Dole ne ka rubuta cikakken amsarka a cikin Harshen Hausa kawai."
-        )
-        context_label = "Bayani Daga Littafi"
     else:
         active_db = english_db
         matched_fact = "Advise general monitoring, checking soil moisture, clearing competitive weeds, and maintaining row spacing layout protocols."
         system_instruction = (
-            "You are an expert African agricultural advisor. "
-            "CRITICAL: Use the provided Factsheet Context to answer the user's question accurately. "
+            "You are an expert African agricultural advisor.\n"
+            "CRITICAL: Use the provided Factsheet Context to answer the user's question accurately.\n"
             "Do NOT invent unrelated facts, and write your final answer ONLY in clear, concise English text."
         )
         context_label = "FactsheetContext"
 
-    # CRITICAL TRACKING CHECK: Only run lookups if documents actually exist inside memory structures
+    # CRITICAL TRACKING CHECK: Only run semantic search if matrices are loaded matching configuration
     if (encoder is not None and 
         active_db is not None and 
         active_db.get("embeddings") is not None and 
@@ -252,11 +245,8 @@ def run_ai_advisory(user_input, lang):
             query_embedding = encoder.encode(user_input, convert_to_tensor=True)
             cos_scores = util.cos_sim(query_embedding, active_db["embeddings"])
             best_match_idx = int(np.argmax(cos_scores.cpu().numpy()))
-         
-            # Safe access confirmed via numeric list validation parameters
             matched_fact = active_db["chunks"][best_match_idx]
             best_match_meta = active_db["metadata"][best_match_idx]
-            
             st.session_state.current_page_num = best_match_meta["page_num"]
             st.session_state.current_book_name = best_match_meta["file_name"]
             
@@ -272,29 +262,45 @@ def run_ai_advisory(user_input, lang):
                     st.session_state.current_page_img = img_path
         except Exception:
             pass
-    else:
-        # Graceful notice letting you know the database folders are currently blank
-        msg = "⚠️ Library index empty. Please ensure your PDFs are in 'rag_data/' directory!" if lang == "English" else "⚠️ Littattafan bayani babu su. Da fatan za a duba babban fayil na 'rag_data/'!"
-        return f"{msg}{cultural_closing}"
 
     if (not LLAMA_AVAILABLE) or (llm is None):
-        prefix = "**Tabbataccen Bayani Daga Littafi:** " if lang == "Hausa" else "**Offline Semantic Match:** "
+        prefix = "**Bayanin Littafi:**\n" if lang == "Hausa" else "**Offline Semantic Match:**\n"
         return f"{prefix}{matched_fact}{cultural_closing}"
 
     try:
-        prompt = (
-            f"<|im_start|>system\n{system_instruction}\n{context_label}:{matched_fact}<|im_end|>\n"
-            f"<|im_start|>user\n{user_input}<|im_end|>\n"
-            f"<|im_start|>assistant\n"
-        )
-        response = llm(
-            prompt, max_tokens=150, temperature=0.1, top_p=0.2, repeat_penalty=1.1,
-            stop=["<|im_end|>", "<|im_start|>", "User:", "System:"]
-        )
+        # Separate the tracks completely to fulfill your design requirement
+        if lang == "Hausa":
+            # TRACK A: Strict text-matching layout for Hausa (No translations, no explanations)
+            prompt = (
+                f"Textbook Passage:\n{matched_fact}\n\n"
+                f"Task: Extract the relevant sentence or lines from the Textbook Passage that answer the question: '{user_input}'. "
+                f"Output ONLY that raw text verbatim. Do not explain it, do not translate it, and do not add conversational remarks.\n\n"
+                f"Verbatim Hausa Output:\n"
+            )
+            # Low temperature to force literal reproduction of the PDF text
+            response = llm(
+                prompt, max_tokens=150, temperature=0.0, top_p=0.1, repeat_penalty=1.3,
+                stop=["Textbook Passage:", "Task:", "\n\n"]
+            )
+        else:
+            # TRACK B: Your original working ChatML setup for the English advisor track
+            prompt = (
+                f"<|im_start||system\n{system_instruction}\n{context_label}:{matched_fact}<|im_end|>\n"
+                f"<|im_start|>user\n{user_input}<|im_end|>\n"
+                f"<|im_start|>assistant\n"
+            )
+            response = llm(
+                prompt, max_tokens=150, temperature=0.1, top_p=0.2, repeat_penalty=1.1,
+                stop=["<|im_end|>", "<|im_start|>", "User:", "System:"]
+            )
+
         ai_response = response['choices'][0]['text'].strip()
         ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response)
-        if len(ai_response) <= 3:
-            ai_response = f"Bayanin Gona: {matched_fact}" if lang == "Hausa" else f"Farming Truth Block: {matched_fact}"
+        
+        # Guard rails for Hausa extraction: if it bugs out or produces empty strings, return the raw PDF chunk
+        if lang == "Hausa" and len(ai_response) <= 5:
+            return f"{matched_fact}{cultural_closing}"
+            
         return f"{ai_response}{cultural_closing}"
     except Exception as e:
         return "An samu matsala wajen sarrafa bayanin." if lang == "Hausa" else f"An error occurred: {e}"
