@@ -291,7 +291,7 @@ def run_ai_advisory(user_input, lang):
             prompt, max_tokens=150, temperature=0.1, top_p=0.2, repeat_penalty=1.1,
             stop=["<|im_end|>", "<|im_start|>", "User:", "System:"]
         )
-        ai_response = response['choices']['text'].strip()
+        ai_response = response['choices'][0]['text'].strip()
         ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response)
         if len(ai_response) <= 3:
             ai_response = f"Bayanin Gona: {matched_fact}" if lang == "Hausa" else f"Farming Truth Block: {matched_fact}"
