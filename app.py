@@ -451,11 +451,15 @@ with tab1:
                 st.rerun()
 
     with col_viewer:
-        viewer_title = "📚 Encyclopedia Reference Viewer" if selected_lang == "English" else "📚 Hoton Littafin Encyclopedia"
+        viewer_title = "Encyclopedia Reference Viewer" if selected_lang == "English" else "Hoton Littafin Encyclopedia"
         st.markdown(f"### {viewer_title}")
-        if st.session_state.current_page_img and os.path.exists(st.session_state.current_page_img):
-            st.success(f"📍 Displaying page {st.session_state.current_page_num} from `{st.session_state.current_book_name}`")
-            st.image(st.session_state.current_page_img, use_container_width=True)
+        
+        # FIXED: Explicitly force lowercase formatting to match background OS cache naming schemas
+        safe_cache_img = os.path.join("page_cache", f"rendered_page_{selected_lang.lower()}.png")
+        
+        if os.path.exists(safe_cache_img):
+            st.success(f"Displaying page {st.session_state.current_page_num} from `{st.session_state.current_book_name}`")
+            st.image(safe_cache_img, use_container_width=True)
         else:
             default_info = (
                 "When you search for crop symptoms, the authentic visual textbook page matching your diagnosis will render here instantly completely offline."
