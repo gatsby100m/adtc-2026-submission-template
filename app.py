@@ -251,7 +251,7 @@ def run_ai_advisory(user_input, lang):
         try:
             query_embedding = encoder.encode(user_input, convert_to_tensor=True)
             cos_scores = util.cos_sim(query_embedding, active_db["embeddings"])
-            best_match_idx = int(np.ravel(np.argmax(cos_scores.cpu().numpy())))
+            best_match_idx = int(np.argmax(cos_scores.cpu().numpy())))
          
             # Safe access confirmed via numeric list validation parameters
             matched_fact = active_db["chunks"][best_match_idx]
