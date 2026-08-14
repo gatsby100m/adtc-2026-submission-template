@@ -302,7 +302,7 @@ def run_ai_advisory(user_input, lang):
                 f"<|im_start|>assistant\n"
             )
             response = llm(
-                prompt, max_tokens=150, temperature=0.1, top_p=0.2, repeat_penalty=1.1,
+                prompt, max_tokens=150, temperature=0.0, top_p=0.2, repeat_penalty=0.0,
                 stop=["<|im_end|>", "<|im_start|>", "User:", "System:"]
             )
             ai_response = response['choices'][0]['text'].strip()
