@@ -219,99 +219,104 @@ if "current_book_name" not in st.session_state: st.session_state.current_book_na
 # INFERENCE INTERACTION ENGINE
 #=====================================================================
 def run_ai_advisory(user_input, lang):
-    """Processes search arrays, extracts keywords via local LLM for Hausa, and returns direct contexts."""
-    cultural_closing = "\n\n*Allahu ya bada amfanin gona mai albarka! Mandani na gari!*" if lang == "Hausa" else "\n\n*May your harvest be heavy and rewarding!*"
-    final_search_query = user_input
+    """Processes search arrays, retrieves reference pages cleanly, and enforces 0.0 deterministic bounds."""
+    cultural_closing = "\n\n*Allahyabadaamfaningonamaialbarka!Mandaninagari!*" if lang == "Hausa" else "\n\n*Mayyourharvestbeheavyandrewarding!*"
     
-    #--- HAUSA TRACK: KEYWORD EXTRACTION TRACK ---
+    # 1. Establish strict guardrail system prompts
     if lang == "Hausa":
         active_db = hausa_db
-        matched_fact = "Bincika damshin ƙasa, cire ciyayi, da kiyaye tazarar shuka."
-        
-        if LLAMA_AVAILABLE and llm is not None:
-            try:
-                # Force the 0.5B model to act strictly as a keyword filter
-                keyword_prompt = (
-                    f"User Question: {user_input}\n\n"
-                    f"Task: Extract the 2 most critical agricultural keywords or disease names from the question above. "
-                    f"Output ONLY those raw keywords separated by spaces. Do not translate. Do not write full sentences.\n"
-                    f"Keywords: "
-                )
-                response = llm(
-                    keyword_prompt, max_tokens=20, temperature=0.0, top_p=0.1,
-                    stop=["User Question:", "Task:", "\n"]
-                )
-                extracted_keywords = response['choices'][0]['text'].strip()
-                if len(extracted_keywords) > 2:
-                    final_search_query = extracted_keywords
-            except Exception:
-                pass
-
-    #--- ENGLISH TRACK: ORIGINAL WORKING SYSTEM ---
+        fallback_msg = "Symptom ba a samu a cikin littafin gona ba. Don Allah a sake duba alamun."
+        system_instruction = (
+            "Kai babban masanin shawarwari na aikin gona ne na Afirka.\n"
+            "HAKKI: Dole ne ka yi amfani da bayanan 'Bayani Daga Littafi' KAWAI don amsa tambayar. "
+            "Idan bayanan ba su ƙunshi amsar ba, danna rubuta: 'Symptom ba a samu a cikin littafin gona ba.'\n"
+            "GARGADI: Kada ka yi amfani da sanin kanka na ciki. Rubuta amsarka cikin Harshen Hausa kawai."
+        )
+        context_label = "Bayani Daga Littafi"
     else:
         active_db = english_db
-        matched_fact = "Advise general monitoring, checking soil moisture, clearing competitive weeds, and maintaining row spacing layout protocols."
+        fallback_msg = "Symptom not found in the local textbook manual. Please try rephrasing."
         system_instruction = (
-            "You are an expert African agricultural advisor.\n"
-            "CRITICAL: Use the provided Factsheet Context to answer the user's question accurately.\n"
-            "Do NOT invent unrelated facts, and write your final answer ONLY in clear, concise English text."
+            "You are a strict, offline African agricultural text reader.\n"
+            "CRITICAL ORDER: Answer the user's question using ONLY the provided 'FactsheetContext' below. "
+            "If the context context does not explicitly mention or resolve the issue, your final answer MUST be exactly: "
+            "'Symptom not found in the local textbook manual.'\n"
+            "Do NOT use external pre-trained knowledge, do NOT extrapolate, and do NOT create fake citations."
         )
         context_label = "FactsheetContext"
 
-    #--- LOOKUP CORE ENGINE ---
-    if (encoder is not None and 
-        active_db is not None and 
-        active_db.get("embeddings") is not None and 
-        len(active_db.get("chunks", [])) > 0):
-        
+    matched_fact = ""
+    
+    # 2. Vector Search Retrieval with a strict Similarity Score Threshold
+    if encoder is not None and active_db["embeddings"] is not None and len(active_db["chunks"]) > 0:
         try:
-            query_embedding = encoder.encode(final_search_query, convert_to_tensor=True)
-            cos_scores = util.cos_sim(query_embedding, active_db["embeddings"])
-            best_match_idx = int(np.argmax(cos_scores.cpu().numpy()))
-            matched_fact = active_db["chunks"][best_match_idx]
-            best_match_meta = active_db["metadata"][best_match_idx]
-            st.session_state.current_page_num = best_match_meta["page_num"]
-            st.session_state.current_book_name = best_match_meta["file_name"]
+            query_embedding = encoder.encode(user_input, convert_to_tensor=True)
+            cos_scores = util.cos_sim(query_embedding, active_db["embeddings"]).cpu().numpy()[0]
             
-            if PDF_LIBS_AVAILABLE:
-                images = convert_from_path(
-                    best_match_meta["file_path"],
-                    first_page=best_match_meta["page_num"],
-                    last_page=best_match_meta["page_num"]
-                )
-                if images:
-                    img_path = os.path.join(CACHE_DIR, f"rendered_page_{lang.lower()}.png")
-                    images.save(img_path, "PNG")
-                    st.session_state.current_page_img = img_path
+            best_match_idx = int(np.argmax(cos_scores))
+            highest_score = cos_scores[best_match_idx]
+            
+            # CRITICAL THRESHOLD: If the book does not match the query by at least 60%, reject it
+            if highest_score >= 0.60:
+                matched_fact = active_db["chunks"][best_match_idx]
+                best_match_meta = active_db["metadata"][best_match_idx]
+                st.session_state.current_page_num = best_match_meta["page_num"]
+                st.session_state.current_book_name = best_match_meta["file_name"]
+                
+                if PDF_LIBS_AVAILABLE:
+                    images = convert_from_path(
+                        best_match_meta["file_path"],
+                        first_page=best_match_meta["page_num"],
+                        last_page=best_match_meta["page_num"]
+                    )
+                    if images:
+                        img_path = os.path.join(CACHE_DIR, f"rendered_page_{lang.lower()}.png")
+                        images.save(img_path, "PNG")
+                        st.session_state.current_page_img = img_path
+            else:
+                # Force fallback if similarity score is too low
+                return f"{fallback_msg}{cultural_closing}"
+                
         except Exception:
             pass
 
-    #--- RESPONSE SELECTION DISPATCH ---
-    try:
-        if lang == "Hausa":
-            # BYPASS COMPLETELY: Print raw textbook sentences in 100% pure Hausa text
-            return f"**Bayanin Littafi (Direct Document Chunk):**\n\n{matched_fact}{cultural_closing}"
-        
-        else:
-            if (not LLAMA_AVAILABLE) or (llm is None):
-                return f"**Offline Semantic Match:**\n{matched_fact}{cultural_closing}"
-                
-            prompt = (
-                f"<|im_start||system\n{system_instruction}\n{context_label}:{matched_fact}<|im_end|>\n"
-                f"<|im_start|>user\n{user_input}<|im_end|>\n"
-                f"<|im_start|>assistant\n"
-            )
-            response = llm(
-                prompt, max_tokens=150, temperature=0.0, top_p=0.2, repeat_penalty=0.0,
-                stop=["<|im_end|>", "<|im_start|>", "User:", "System:"]
-            )
-            ai_response = response['choices'][0]['text'].strip()
-            ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response)
-            return f"{ai_response}{cultural_closing}"
-            
-    except Exception as e:
-        return "An samu matsala wajen sarrafa bayanin." if lang == "Hausa" else f"An error occurred: {e}"
+    # Fallback to structural message if the database is dry or empty
+    if not matched_fact.strip():
+        return f"{fallback_msg}{cultural_closing}"
 
+    if (not LLAMA_AVAILABLE) or (llm is None):
+        prefix = "**TabbataccenBayaniDagaLittafi:** " if lang == "Hausa" else "**Offline Semantic Match:** "
+        return f"{prefix}{matched_fact}{cultural_closing}"
+
+    # 3. Secure prompt payload creation with deterministic model generation parameters
+    try:
+        prompt = (
+            f"<|im_start|>system\n{system_instruction}\n{context_label}:{matched_fact}<|im_end|>\n"
+            f"<|im_start|>user\n{user_input}<|im_end|>\n"
+            f"<|im_start|>assistant\n"
+        )
+        
+        # Enforcing exact 0.0 behavior configurations
+        response = llm(
+            prompt,
+            max_tokens=200,
+            temperature=0.0,       # Strict accuracy lock
+            top_p=1.0,             # Unlocks the token pool for optimal highest-probability pathing
+            repeat_penalty=1.1,    # Prevents infinite local engine looping bugs
+            stop=["<|im_end|>", "<|im_start|>", "User:", "System:"]
+        )
+        
+        ai_response = response['choices']['text'].strip()
+        ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response)  # Clean up formatting artifacts
+        
+        if len(ai_response) <= 3:
+            ai_response = f"BayaninGona: {matched_fact}" if lang == "Hausa" else f"FarmingTruthBlock: {matched_fact}"
+            
+        return f"{ai_response}{cultural_closing}"
+        
+    except Exception as e:
+        return "An samu matsala wajen sarrafa bayanai." if lang == "Hausa" else f"An error occurred: {e}"
+            
 #=====================================================================
 # DICTIONARY TRANSLATION DICTIONARY (Fixed Missing Tab Elements)
 #=====================================================================
