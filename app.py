@@ -214,7 +214,7 @@ if "input_counter" not in st.session_state: st.session_state.input_counter = 0
 if "current_page_img" not in st.session_state: st.session_state.current_page_img = None
 if "current_page_num" not in st.session_state: st.session_state.current_page_num = None
 if "current_book_name" not in st.session_state: st.session_state.current_book_name = None
-
+if "last_ai_response" not in st.session_state: st.session_state.last_ai_response = None
 #=====================================================================
 # INFERENCE INTERACTION ENGINE
 #=====================================================================
