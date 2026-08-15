@@ -436,43 +436,48 @@ with tab1:
             user_audio = uploaded_audio
             
         col_btn1, col_btn2 = st.columns(2)
+                # --- LINE 439 STOPS HERE / REPLACE ONLY THE BUTTONS & VIEWER BELOW ---
         with col_btn1:
-            if st.button(labels["submit_btn"], type="primary", key="submit_symptom_btn"):
-                if user_text:
-                    with st.spinner("Processing analysis..."):
-                        st.write(run_ai_advisory(user_text, selected_lang))
-                elif user_audio is not None:
-                    st.info("Audio received locally. (Processing audio waves context...)")
-                    with st.spinner("Processing analysis..."):
-                        st.write(run_ai_advisory("spots", selected_lang))
-                else:
-                    st.warning("Please provide either text or audio input first.")
+            if st.button(labels["submit_btn"], type="primary", key="main_diagnostic_trigger"):
+                if user_text.strip():
+                    with st.spinner("Analyzing symptoms..." if selected_lang == "English" else "Ana duba alamun..."):
+                        # Process analysis and update session states
+                        st.session_state.last_ai_response = run_ai_advisory(user_text, selected_lang)
+                        # Force instant rerun so the image viewer catches the new state
+                        st.rerun()
+
         with col_btn2:
-            if st.button("Delete & Clear Inputs / Goge Bayanai", key="clear_inputs_btn"):
-                st.session_state.input_counter += 1
+            if st.button(labels["clear_btn"], key="clear_diagnostic_trigger"):
+                st.session_state.last_ai_response = ""
                 st.session_state.current_page_img = None
-                st.session_state.current_page_num = None
-                st.session_state.current_book_name = None
+                st.session_state.current_page_num = 1
+                st.session_state.current_book_name = ""
                 st.rerun()
 
-    with col_viewer:
-        viewer_title = "Encyclopedia Reference Viewer" if selected_lang == "English" else "Hoton Littafin Encyclopedia"
-        st.markdown(f"### {viewer_title}")
-        
-        # FIXED: Explicitly force lowercase formatting to match background OS cache naming schemas
-        safe_cache_img = os.path.join("page_cache", f"rendered_page_{selected_lang.lower()}.png")
-        
-        if os.path.exists(safe_cache_img):
-            st.success(f"Displaying page {st.session_state.current_page_num} from `{st.session_state.current_book_name}`")
-            st.image(safe_cache_img, use_container_width=True)
-        else:
-            default_info = (
-                "When you search for crop symptoms, the authentic visual textbook page matching your diagnosis will render here instantly completely offline."
-                if selected_lang == "English" else
-                "Bincika alamomin cututtuka zai nuna muku aihin shafin littafin aikin gona tare da hotuna ko jadawali a nan ba tare da internet ba."
-            )
-            st.info(default_info)
+        # Render the text response inside the chat column
+        if st.session_state.last_ai_response:
+            st.markdown("---")
+            st.subheader("📋 Advisor Response" if selected_lang == "English" else "📋 Shafar Shawarwari")
+            st.write(st.session_state.last_ai_response)
 
+    # --- COLUMN 2: ENCYCLOPEDIA REFERENCE VIEWER ---
+    with col_viewer:
+        st.subheader("📖 Encyclopedia Reference Viewer" if selected_lang == "English" else "📖 Shafar Karatun Littafi")
+        st.info(labels["encyclopedia_desc"])
+        
+        if st.session_state.current_page_img and os.path.exists(st.session_state.current_page_img):
+            st.markdown(f"**Source Document:** `{st.session_state.current_book_name}`")
+            st.markdown(f"**Verified Matches Located on Page:** `{st.session_state.current_page_num}`")
+            
+            st.image(
+                st.session_state.current_page_img, 
+                caption="Authentic textbook reference page rendered completely offline." if selected_lang == "English" else "Hoton littafi na gaskiya da aka ciro ba tare da intanet ba.",
+                use_container_width=True
+            )
+        else:
+            st.warning("No diagnostic matches are loaded into the active cache view." if selected_lang == "English" else "Babu tabbataccen bayani da aka ciro tukunna.")
+            
+# --- STOP REPLACING HERE --- Your Timeline Calculator & Financial Ledger code continues below as normal
 # --- TAB 2: TIMELINE METRIC ENGINE ---
 with tab2:
     selected_crop = st.selectbox(labels["crop_select"], ["Maize", "Cassava"], key="tab2_crop_selector")
