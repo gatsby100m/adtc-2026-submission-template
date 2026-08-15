@@ -293,8 +293,9 @@ if matched_fact and PDF_LIBS_AVAILABLE:
                 break
     except Exception:
         pass
-
-
+    # Fallback to structural message if the database is dry or empty
+    if not matched_fact.strip():
+        return f"{fallback_msg}{cultural_closing}"        
     # Fallback to structural message if the database is dry or empty
     if not matched_fact.strip():
         return f"{fallback_msg}{cultural_closing}"
