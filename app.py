@@ -447,16 +447,13 @@ with tab1:
                         st.rerun()
 
         with col_btn2:
-            # Using your EXACT valid dictionary key from the top of the file
-            if st.button(labels["clear_btn"], key="clear_diagnostic_trigger"):
-                st.session_state.saved_user_text = ""
-                st.session_state.last_ai_response = ""
+            if st.button("Delete & Clear Inputs / Goge Bayanai", key="clear_inputs_btn"):
+                st.session_state.input_counter += 1
                 st.session_state.current_page_img = None
-                st.session_state.current_page_num = 1
-                st.session_state.current_book_name = ""
+                st.session_state.current_page_num = None
+                st.session_state.current_book_name = None
                 st.rerun()
-
-
+        
         # Render the text response inside the chat column
         if st.session_state.last_ai_response:
             st.markdown("---")
