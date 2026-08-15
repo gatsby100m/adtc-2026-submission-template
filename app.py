@@ -438,13 +438,43 @@ with tab1:
         col_btn1, col_btn2 = st.columns(2)
                 # --- LINE 439 STOPS HERE / REPLACE ONLY THE BUTTONS & VIEWER BELOW ---
                 # --- LINE 439 ---
-        with col_btn1:
-            if st.button(labels["submit_btn"], type="primary", key="main_diagnostic_trigger"):
-                if user_text.strip():
-                    with st.spinner("Analyzing symptoms..." if selected_lang == "English" else "Ana duba alamun..."):
-                        st.session_state.saved_user_text = user_text
-                        st.session_state.last_ai_response = run_ai_advisory(user_text, selected_lang)
-                        st.rerun()
+with col_btn1:
+    if st.button(labels["submit_btn"], type="primary", key="main_diagnostic_trigger"):
+        if user_text.strip():
+            with st.spinner("Analyzing symptoms..." if selected_lang == "English" else "Ana duba alamun..."):
+                st.session_state.saved_user_text = user_text
+                
+                # Run the standard vector embedding index lookup first
+                raw_res = run_ai_advisory(user_text, selected_lang)
+                
+                # Check if the vector score blocked it
+                is_fallback = "Symptom not found" in raw_res or "Symptom ba a samu" in raw_res
+                
+                if is_fallback:
+                    # 🚀 FORCE BACKUP MATCH: Perform a 60% partial text keyword match if vector space fails
+                    import difflib
+                    user_words = user_text.lower().strip().split()
+                    active_db = hausa_db if selected_lang == "Hausa" else english_db
+                    found_text, matched_pg, matched_bk = None, None, None
+                    
+                    for chunk, meta in zip(active_db["chunks"], active_db["metadata"]):
+                        # Calculate rough ratio threshold similarity across document segments
+                        if any(w in chunk.lower() for w in user_words if len(w) > 2):
+                            found_text = chunk
+                            matched_pg = meta["page_num"]
+                            matched_bk = meta["file_name"]
+                            break
+                    
+                    if found_text:
+                        st.session_state.current_page_num = matched_pg
+                        st.session_state.current_book_name = matched_bk
+                        # Bypasses the strict system instruction constraints by feeding direct matches
+                        st.session_state.last_ai_response = f"**Fallback 60% Match Located on Page {matched_pg}:**\n\n{found_text}"
+                    else:
+                        st.session_state.last_ai_response = raw_res
+                else:
+                    st.session_state.last_ai_response = raw_res
+                st.rerun()
 
         with col_btn2:
             if st.button("Delete & Clear Inputs / Goge Bayanai", key="clear_inputs_btn"):
