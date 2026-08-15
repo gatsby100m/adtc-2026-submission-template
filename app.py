@@ -460,11 +460,21 @@ with tab1:
             st.subheader("📋 Advisor Response" if selected_lang == "English" else "📋 Shafar Shawarwari")
             st.write(st.session_state.last_ai_response)
 
-    # --- COLUMN 2: ENCYCLOPEDIA REFERENCE VIEWER ---
+        # --- COLUMN 2: ENCYCLOPEDIA REFERENCE VIEWER ---
     with col_viewer:
         st.subheader("📖 Encyclopedia Reference Viewer" if selected_lang == "English" else "📖 Shafar Karatun Littafi")
-        st.info(labels["encyclopedia_desc"])
         
+        # FIXED: Hardcoded text completely removes the KeyError and unblocks your search engine
+        viewer_desc = (
+            "When you search for crop symptoms, the authentic visual textbook page "
+            "matching your diagnosis will render here instantly completely offline."
+        ) if selected_lang == "English" else (
+            "Lokacin da kacc bincika alamun cututtuka, shafin littafin gaskiya na gaske "
+            "wanda ya dace da gano ku zai fito anan take ba tare da intanet ba."
+        )
+        st.info(viewer_desc)
+        
+        # This is where your code draws the visual page from your PDF text context
         if st.session_state.current_page_img and os.path.exists(st.session_state.current_page_img):
             st.markdown(f"**Source Document:** `{st.session_state.current_book_name}`")
             st.markdown(f"**Verified Matches Located on Page:** `{st.session_state.current_page_num}`")
@@ -476,7 +486,7 @@ with tab1:
             )
         else:
             st.warning("No diagnostic matches are loaded into the active cache view." if selected_lang == "English" else "Babu tabbataccen bayani da aka ciro tukunna.")
-            
+
 # --- STOP REPLACING HERE --- Your Timeline Calculator & Financial Ledger code continues below as normal
 # --- TAB 2: TIMELINE METRIC ENGINE ---
 with tab2:
