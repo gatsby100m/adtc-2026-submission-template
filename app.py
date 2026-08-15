@@ -295,7 +295,7 @@ if matched_fact and PDF_LIBS_AVAILABLE:
         pass
     # Fallback to structural message if the database is dry or empty
     if not matched_fact.strip():
-        return f"{fallback_msg}{cultural_closing}"        
+        #return f"{fallback_msg}{cultural_closing}"        
     
     if (not LLAMA_AVAILABLE) or (llm is None):
         prefix = "**TabbataccenBayaniDagaLittafi:** " if lang == "Hausa" else "**Offline Semantic Match:** "
