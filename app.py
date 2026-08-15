@@ -437,22 +437,25 @@ with tab1:
             
         col_btn1, col_btn2 = st.columns(2)
                 # --- LINE 439 STOPS HERE / REPLACE ONLY THE BUTTONS & VIEWER BELOW ---
+                # --- LINE 439 ---
         with col_btn1:
             if st.button(labels["submit_btn"], type="primary", key="main_diagnostic_trigger"):
                 if user_text.strip():
                     with st.spinner("Analyzing symptoms..." if selected_lang == "English" else "Ana duba alamun..."):
-                        # Process analysis and update session states
+                        st.session_state.saved_user_text = user_text
                         st.session_state.last_ai_response = run_ai_advisory(user_text, selected_lang)
-                        # Force instant rerun so the image viewer catches the new state
                         st.rerun()
 
         with col_btn2:
-            if st.button(labels["Delete&ClearInputs/GogeBayanai"], key="clear_diagnostic_trigger"):
+            # Using your EXACT valid dictionary key from the top of the file
+            if st.button(labels["clear_btn"], key="clear_diagnostic_trigger"):
+                st.session_state.saved_user_text = ""
                 st.session_state.last_ai_response = ""
                 st.session_state.current_page_img = None
                 st.session_state.current_page_num = 1
                 st.session_state.current_book_name = ""
                 st.rerun()
+
 
         # Render the text response inside the chat column
         if st.session_state.last_ai_response:
