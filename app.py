@@ -447,7 +447,7 @@ with tab1:
                         st.rerun()
 
         with col_btn2:
-            if st.button(labels["clear_btn"], key="clear_diagnostic_trigger"):
+            if st.button(labels["Delete&ClearInputs/GogeBayanai"], key="clear_diagnostic_trigger"):
                 st.session_state.last_ai_response = ""
                 st.session_state.current_page_img = None
                 st.session_state.current_page_num = 1
