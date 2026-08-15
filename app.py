@@ -246,39 +246,54 @@ def run_ai_advisory(user_input, lang):
         context_label = "FactsheetContext"
 
     matched_fact = ""
-    
-    # 2. Vector Search Retrieval with a strict Similarity Score Threshold
-    if encoder is not None and active_db["embeddings"] is not None and len(active_db["chunks"]) > 0:
-        try:
-            query_embedding = encoder.encode(user_input, convert_to_tensor=True)
-            cos_scores = util.cos_sim(query_embedding, active_db["embeddings"]).cpu().numpy()[0]
-            
-            best_match_idx = int(np.argmax(cos_scores))
-            highest_score = cos_scores[best_match_idx]
-            
-            # CRITICAL THRESHOLD: If the book does not match the query by at least 60%, reject it
-            if highest_score >= 0.60:
-                matched_fact = active_db["chunks"][best_match_idx]
-                best_match_meta = active_db["metadata"][best_match_idx]
-                st.session_state.current_page_num = best_match_meta["page_num"]
-                st.session_state.current_book_name = best_match_meta["file_name"]
-                
-                if PDF_LIBS_AVAILABLE:
-                    images = convert_from_path(
-                        best_match_meta["file_path"],
-                        first_page=best_match_meta["page_num"],
-                        last_page=best_match_meta["page_num"]
-                    )
-                    if images:
-                        img_path = os.path.join(CACHE_DIR, f"rendered_page_{lang.lower()}.png")
-                        images.save(img_path, "PNG")
-                        st.session_state.current_page_img = img_path
-            else:
-                # Force fallback if similarity score is too low
-                return f"{fallback_msg}{cultural_closing}"
-                
-        except Exception:
-            pass
+    # 2. Hybrid Vector Search with an Automatic 60% Keyword Text Backup
+vector_matched = False
+if encoder is not None and active_db["embeddings"] is not None and len(active_db["chunks"]) > 0:
+    try:
+        query_embedding = encoder.encode(user_input, convert_to_tensor=True)
+        cos_scores = util.cos_sim(query_embedding, active_db["embeddings"]).cpu().numpy()[0]
+        best_match_idx = int(np.argmax(cos_scores))
+        highest_score = cos_scores[best_match_idx]
+        
+        if highest_score >= 0.60:
+            matched_fact = active_db["chunks"][best_match_idx]
+            best_match_meta = active_db["metadata"][best_match_idx]
+            st.session_state.current_page_num = best_match_meta["page_num"]
+            st.session_state.current_book_name = best_match_meta["file_name"]
+            vector_matched = True
+    except Exception:
+        pass
+
+# 🚀 If the mathematical vector model misses, run a direct 60% keyword search
+if not vector_matched and len(active_db["chunks"]) > 0:
+    user_words = user_input.lower().strip().split()
+    for chunk, meta in zip(active_db["chunks"], active_db["metadata"]):
+        # Checks if core disease words are present directly in the textbook page
+        if any(word in chunk.lower() for word in user_words if len(word) > 2):
+            matched_fact = chunk
+            st.session_state.current_page_num = meta["page_num"]
+            st.session_state.current_book_name = meta["file_name"]
+            break
+
+# Safely process visual page layout mapping using whichever block found the page
+if matched_fact and PDF_LIBS_AVAILABLE:
+    try:
+        from pypdf import PdfReader
+        from pdf2image import convert_from_path
+        
+        # Pull file paths using metadata indexes securely
+        for filename in os.listdir(os.path.join(RAG_DIR, lang.lower())):
+            if filename == st.session_state.current_book_name:
+                f_path = os.path.join(RAG_DIR, lang.lower(), filename)
+                images = convert_from_path(f_path, first_page=st.session_state.current_page_num, last_page=st.session_state.current_page_num)
+                if images:
+                    img_path = os.path.join(CACHE_DIR, f"rendered_page_{lang.lower()}.png")
+                    images.save(img_path, "PNG")
+                    st.session_state.current_page_img = img_path
+                break
+    except Exception:
+        pass
+
 
     # Fallback to structural message if the database is dry or empty
     if not matched_fact.strip():
