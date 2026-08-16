@@ -315,9 +315,10 @@ def run_ai_advisory(user_input, lang):
             ai_response = f"Farming Truth Block: {matched_fact}"
             
         return f"{ai_response}{cultural_closing}"
-    except Exception as e:
-        return f"An error occurred during LLM processing: {e}"
-            
+    except Exception:
+        # If the LLM engine fails or runs out of memory, safely output the raw textbook text
+        prefix = "**Offline Semantic Match:**\n\n"
+        return f"{prefix}{matched_fact}{cultural_closing}"
 #=====================================================================
 # DICTIONARY TRANSLATION DICTIONARY (Fixed Missing Tab Elements)
 #=====================================================================
