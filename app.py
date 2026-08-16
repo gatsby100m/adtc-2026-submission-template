@@ -42,11 +42,11 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 # Google Drive IDs mapped cleanly for automated retrieval scripts
 KNOWLEDGE_BASE = {
     "english": {
-        "VegetablesbyBayerTomatoDiseaseGuide.pdf": "1gQ29XZTsMYNS6kdA22rUG18iML6q6ZHA",
-        "Man_Maize_diseases_CIMMYT.pdf": "14U3dBZSdbJI5j07jpzj61wLh6lwxLAyD",
-        "PRODUCTION-GUIDE-ON-TOMATO.pdf": "1jokdh9e3D1UVnYm-vrC5ov3tXwgS1KsY",
-        "PestanddiseasemanualallPRAMandASHC.pdf": "1KRdC35MF1VLqgGzO3A6W5HUoaoNgDUWM",
-        "Concise-Encyclopedia-of-Plant-Diseases.pdf": "1cJgi9eGnx35CEMFziMoE8nyEKmfHoWxi"
+        "VegetablesbyBayerTomatoDiseaseGuide.pdf": "1lziyd4oXiiWK8zGBzz9zz12JSRlOiufy",
+        "Man_Maize_diseases_CIMMYT.pdf": "1LzwK91UP8sBZ0dgnAWgjTfX9bXKTl0zS",
+        "PRODUCTION-GUIDE-ON-TOMATO.pdf": "1BLWpBleJzN8icgpoyJuiwJRtgSK9Z8Rw",
+        "PestanddiseasemanualallPRAMandASHC.pdf": "1aFo6Y57zheat6-FgwttnbBzwnHFl9EjL",
+        "Concise-Encyclopedia-of-Plant-Diseases.pdf": "1ugRejJFvFKKCeTRR5jWrehYw6TUzaJZB"
     },
     "hausa": {
         "VegetablesbyBayerTomatoDiseaseGuide_ha.pdf": "1gQ29XZTsMYNS6kdA22rUG18iML6q6ZHA",
@@ -56,7 +56,6 @@ KNOWLEDGE_BASE = {
         "Concise-Encyclopedia-of-Plant-Diseases_ha.pdf": "1cJgi9eGnx35CEMFziMoE8nyEKmfHoWxi"
     }
 }
-
 def ensure_books_exist():
     """Validates local directories and downloads missing core textbooks dynamically via gdown."""
     try:
