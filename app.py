@@ -217,81 +217,98 @@ if "current_book_name" not in st.session_state: st.session_state.current_book_na
 # INFERENCE INTERACTION ENGINE
 #=====================================================================
 def run_ai_advisory(user_input, lang):
-    """Processes search arrays, retrieves reference pages, and feeds parameters to the LLM context."""
+    """Processes search arrays, retrieves reference pages cleanly, and enforces 0.0 deterministic bounds."""
     cultural_closing = "\n\n*Allahyabada amfanin gona mai albarka! Mandani na gari!*" if lang == "Hausa" else "\n\n*May your harvest be heavy and rewarding!*"
     
+    # 1. Establish strict guardrail system prompts
     if lang == "Hausa":
         active_db = hausa_db
-        matched_fact = "Bincika damshin ƙasa, cire ciyayi, da kiyaye tazarar shuka."
+        fallback_msg = "Symptom ba a samu a cikin littafin gona ba. Don Allah a sake duba alamun."
         system_instruction = (
-            "Kai babban masanin shawarwari na aikin gona ne na Afirka. "
-            "HAKKI: Yi amfani da bayanan da aka bayar a ƙasa don amsa tambayar manomi daidai. "
-            "Kada ka ƙirƙiri wani abu da babu shi a cikin bayanan. "
-            "GARGADI: Dole ne ka rubuta cikakken amsarka a cikin Harshen Hausa kawai."
+            "Kai babban masanin shawarwari na aikin gona ne na Afirka.\n"
+            "HAKKI: Dole ne ka yi amfani da bayanan 'Bayani Daga Littafi' KAWAI don amsa tambayar."
+            "Idan bayanan ba su ƙunshi amsar ba, danna rubuta: 'Symptom ba a samu a cikin littafin gona ba.'\n"
+            "GARGADI: Kada ka yi amfani da sanin kanka na ciki. Rubuta amsarka cikin Harshen Hausa kawai."
         )
         context_label = "Bayani Daga Littafi"
     else:
         active_db = english_db
-        matched_fact = "Advise general monitoring, checking soil moisture, clearing competitive weeds, and maintaining row spacing layout protocols."
+        fallback_msg = "Symptom not found in the local textbook manual. Please try rephrasing."
         system_instruction = (
-            "You are an expert African agricultural advisor. "
-            "CRITICAL: Use the provided Factsheet Context to answer the user's question accurately. "
-            "Do NOT invent unrelated facts, and write your final answer ONLY in clear, concise English text."
+            "You are a strict, offline African agricultural text reader.\n"
+            "CRITICAL ORDER: Answer the user's question using ONLY the provided 'FactsheetContext' below."
+            "If the context context does not explicitly mention or resolve the issue, your final answer MUST be exactly:"
+            "'Symptom not found in the local textbook manual.'\n"
+            "Do NOT use external pre-trained knowledge, do NOT extrapolate, and do NOT create fake citations."
         )
         context_label = "FactsheetContext"
 
-    # CRITICAL TRACKING CHECK: Only run lookups if documents actually exist inside memory structures
-    if (encoder is not None and 
-        active_db is not None and 
-        active_db.get("embeddings") is not None and 
-        len(active_db.get("chunks", [])) > 0):
+    matched_fact = ""
+    
+    # 2. Vector Search Retrieval with a strict Similarity Score Threshold
+    if encoder is not None and active_db["embeddings"] is not None and len(active_db["chunks"]) > 0:
         try:
             query_embedding = encoder.encode(user_input, convert_to_tensor=True)
-            cos_scores = util.cos_sim(query_embedding, active_db["embeddings"])
-            best_match_idx = int(np.argmax(cos_scores.cpu().numpy()))
-            # Safe access confirmed via numeric list validation parameters
-            matched_fact = active_db["chunks"][best_match_idx]
-            best_match_meta = active_db["metadata"][best_match_idx]
-            st.session_state.current_page_num = best_match_meta["page_num"]
-            st.session_state.current_book_name = best_match_meta["file_name"]
-            if PDF_LIBS_AVAILABLE:
-                images = convert_from_path(
-                    best_match_meta["file_path"],
-                    first_page=best_match_meta["page_num"],
-                    last_page=best_match_meta["page_num"]
-                )
-                if images:
-                    img_path = os.path.join(CACHE_DIR, f"rendered_page_{lang.lower()}.png")
-                    images.save(img_path, "PNG")
-                    st.session_state.current_page_img = img_path
+            cos_scores = util.cos_sim(query_embedding, active_db["embeddings"]).cpu().numpy()[0]
+            best_match_idx = int(np.argmax(cos_scores))
+            highest_score = cos_scores[best_match_idx]
+            
+            # CRITICAL THRESHOLD: If the book does not match the query by at least 60%, reject it
+            if highest_score >= 0.60:
+                matched_fact = active_db["chunks"][best_match_idx]
+                best_match_meta = active_db["metadata"][best_match_idx]
+                st.session_state.current_page_num = best_match_meta["page_num"]
+                st.session_state.current_book_name = best_match_meta["file_name"]
+                
+                if PDF_LIBS_AVAILABLE:
+                    images = convert_from_path(
+                        best_match_meta["file_path"],
+                        first_page=best_match_meta["page_num"],
+                        last_page=best_match_meta["page_num"]
+                    )
+                    if images:
+                        img_path = os.path.join(CACHE_DIR, f"rendered_page_{lang.lower()}.png")
+                        images.save(img_path, "PNG")
+                        st.session_state.current_page_img = img_path
+            else:
+                # Force fallback if similarity score is too low
+                return f"{fallback_msg}{cultural_closing}"
         except Exception:
             pass
-    else:
-        # Graceful notice letting you know the database folders are currently blank
-        msg = " Library index empty. Please ensure your PDFs are in 'rag_data/' directory!" if lang == "English" else " Littattafan bayani babu su. Da fatan za a duba babban fayil na 'rag_data/'!"
-        return f"{msg}{cultural_closing}"
+
+    # Fallback to structural message if the database is dry or empty
+    if not matched_fact.strip():
+        return f"{fallback_msg}{cultural_closing}"
 
     if (not LLAMA_AVAILABLE) or (llm is None):
         prefix = "**Tabbataccen Bayani Daga Littafi:** " if lang == "Hausa" else "**Offline Semantic Match:** "
         return f"{prefix}{matched_fact}{cultural_closing}"
 
+    # 3. Secure prompt payload creation with deterministic model generation parameters
     try:
         prompt = (
             f"<|im_start|>system\n{system_instruction}\n{context_label}:{matched_fact}<|im_end|>\n"
             f"<|im_start|>user\n{user_input}<|im_end|>\n"
             f"<|im_start|>assistant\n"
         )
+        # Enforcing exact 0.0 behavior configurations
         response = llm(
-            prompt, max_tokens=150, temperature=0.0, top_p=0.2, repeat_penalty=1.1,
+            prompt,
+            max_tokens=200,
+            temperature=0.0,  # Strict accuracy lock
+            top_p=1.0,        # Unlocks the token pool for optimal highest-probability pathing
+            repeat_penalty=1.1, # Prevents infinite local engine looping bugs
             stop=["<|im_end|>", "<|im_start|>", "User:", "System:"]
         )
-        ai_response = response['choices'][0]['text'].strip()
-        ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response)
+        ai_response = response['choices']['text'].strip()
+        ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response)  # Cleanup formatting artifacts
+        
         if len(ai_response) <= 3:
             ai_response = f"Bayanin Gona: {matched_fact}" if lang == "Hausa" else f"Farming Truth Block: {matched_fact}"
+            
         return f"{ai_response}{cultural_closing}"
     except Exception as e:
-        return "An samu matsala wajen sarrafa bayanin." if lang == "Hausa" else f"An error occurred: {e}"
+        return "An samu matsala wajen sarrafa bayanai." if lang == "Hausa" else f"An error occurred: {e}"
 
 #=====================================================================
 # DICTIONARY TRANSLATION DICTIONARY (Fixed Missing Tab Elements)
@@ -317,9 +334,9 @@ LANG_DICT = {
         "subtitle": "Kwamfutar Shawarwari da Jagorancin Kudaden Gona",
         "proverb_title": " Karin Maganar Manoma",
         "submit_btn": "Bincika Alamomi",
-        "crop_select": "ZabiIrinAmfaninGona:",
-        "date_input": "ZabiRanarShuka:",
-        "calc_btn": "LissaftaLokacinGona",
+        "crop_select": "Zabi Irin Amfanin Gona:",
+        "date_input": "Zabi Ranar Shuka:",
+        "calc_btn": "Lissafta LokacinGona",
         "ledger_input": "Rubuta bayanin kudi (misali, 'An sayar da masara kudin Naira 50000'):",
         "log_btn": "Shigar da Bayanin Kudi",
         "text_input_label": "Yi bayanin alamun rashin lafiyar amfanin gona:",
@@ -368,7 +385,6 @@ def calculate_crop_timeline(crop, planting_date):
 def parse_financial_statement(statement_text):
     text_lower = statement_text.lower()
     numbers = [float(s) for s in re.findall(r'\d+', text_lower)]
-    # FIXED: Handled list slicing syntax correctly to avoid direct assignment type errors
     amount = numbers[0] if numbers else 0.0
     
     if "sold" in text_lower or "sayar" in text_lower or "revenue" in text_lower:
@@ -398,7 +414,7 @@ with tab1:
         text_key = f"text_symptom_{st.session_state.input_counter}"
         audio_key = f"audio_symptom_{st.session_state.input_counter}"
         user_text = st.text_input(labels["text_input_label"], key=text_key)
-
+        
         col_aud1, col_aud2 = st.columns(2)
         with col_aud1:
             user_audio = st.audio_input("Record audio symptoms / Rikodin sauti:", key=audio_key)
@@ -413,37 +429,48 @@ with tab1:
             
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
-            if st.button(labels["submit_btn"], type="primary", key="submit_symptom_btn"):
-                if user_text:
-                    with st.spinner("Processing analysis..."):
-                        st.write(run_ai_advisory(user_text, selected_lang))
-                elif user_audio is not None:
-                    st.info("Audio received locally. (Processing audio waves context...)")
-                    with st.spinner("Processing analysis..."):
-                        st.write(run_ai_advisory("spots", selected_lang))
-                else:
-                    st.warning("Please provide either text or audio input first.")
+            if st.button(labels["submit_btn"], type="primary", key="main_diagnostic_trigger"):
+                if user_text.strip():
+                    with st.spinner("Analyzing symptoms..." if selected_lang == "English" else "Ana duba alamun..."):
+                        st.session_state.saved_user_text = user_text
+                        st.session_state.last_ai_response = run_ai_advisory(user_text, selected_lang)
+                        st.rerun()
         with col_btn2:
             if st.button("Delete & Clear Inputs / Goge Bayanai", key="clear_inputs_btn"):
                 st.session_state.input_counter += 1
                 st.session_state.current_page_img = None
                 st.session_state.current_page_num = None
                 st.session_state.current_book_name = None
+                st.session_state.last_ai_response = None
                 st.rerun()
 
+        # Render the text response inside the chat column
+        if st.session_state.get("last_ai_response"):
+            st.markdown("---")
+            st.subheader(" Advisor Response" if selected_lang == "English" else " Shafar Shawarwari")
+            st.write(st.session_state.last_ai_response)
+
+    # --- COLUMN 2: ENCYCLOPEDIA REFERENCE VIEWER ---
     with col_viewer:
-        viewer_title = " Encyclopedia Reference Viewer" if selected_lang == "English" else " Hoton Littafin Encyclopedia"
-        st.markdown(f"### {viewer_title}")
+        st.subheader(" Encyclopedia Reference Viewer" if selected_lang == "English" else " Shafar Karatun Littafi")
+        viewer_desc = (
+            "When you search for crop symptoms, the authentic visual textbook page matching your diagnosis will render here instantly completely offline."
+        ) if selected_lang == "English" else (
+            "Lokacin da kace bincika alamun cututtuka, shafin littafi gaskiyan agaske wanda ya dace da gano ku zaifito anan take ba tare da intanet ba."
+        )
+        st.info(viewer_desc)
+        
+        # This is where your code draws the visual page from your PDF text context
         if st.session_state.current_page_img and os.path.exists(st.session_state.current_page_img):
-            st.success(f" Displaying page {st.session_state.current_page_num} from `{st.session_state.current_book_name}`")
-            st.image(st.session_state.current_page_img, use_container_width=True)
-        else:
-            default_info = (
-                "When you search for crop symptoms, the authentic visual textbook page matching your diagnosis will render here instantly completely offline."
-                if selected_lang == "English" else
-                "Bincika alamomin cututtuka zai nuna muku aihin shafin littafin aikin gona tare da hotuna ko jadawali a nan ba tare da internet ba."
+            st.markdown(f"**Source Document:** `{st.session_state.current_book_name}`")
+            st.markdown(f"**Verified Matches Located on Page:** `{st.session_state.current_page_num}`")
+            st.image(
+                st.session_state.current_page_img,
+                caption="Authentic textbook reference page rendered completely offline." if selected_lang == "English" else "Hoton littafi na gaskiya da aka ciro ba tare da intanet ba.",
+                use_container_width=True
             )
-            st.info(default_info)
+        else:
+            st.warning("No diagnostic matches are loaded into the active cache view." if selected_lang == "English" else "Babu tabbataccen bayani da aka ciro tukunna.")
 
 # --- TAB 2: TIMELINE METRIC ENGINE ---
 with tab2:
