@@ -276,16 +276,21 @@ def run_ai_advisory(user_input, lang):
                 return f"{fallback_msg}{cultural_closing}"
         except Exception as e:
             st.error(f"Error rendering PDF page image: {e}")
-            
     # Fallback to structural message if the database is dry or empty
     if not matched_fact.strip():
         return f"{fallback_msg}{cultural_closing}"
         
-    if (not LLAMA_AVAILABLE) or (llm is None):
-        prefix = "**Tabbataccen Bayani Daga Littafi:**" if lang == "Hausa" else "**Offline Semantic Match:**"
+    # STRATEGIC FORCED ROUTING: Use raw text match for Hausa, require LLM for English
+    if lang == "Hausa":
+        prefix = "**Tabbataccen Bayani Daga Littafi:**\n\n"
         return f"{prefix}{matched_fact}{cultural_closing}"
         
-    # 3. Secure prompt payload creation with deterministic model generation parameters
+    # English path continues to the LLM core processor
+    if (not LLAMA_AVAILABLE) or (llm is None):
+        prefix = "**Offline Semantic Match:**\n\n"
+        return f"{prefix}{matched_fact}{cultural_closing}"
+        
+    # 3. Secure prompt payload creation for English LLM generation
     try:
         prompt = (
             f"<|im_start|>system\n{system_instruction}\n{context_label}:{matched_fact}<|im_end|>\n"
@@ -293,26 +298,26 @@ def run_ai_advisory(user_input, lang):
             f"<|im_start|>assistant\n"
         )
         
-        # Enforcing exact 0.0 behavior configurations
+        # Enforcing exact 0.0 behavior configurations for English
         response = llm(
             prompt,
             max_tokens=200,
             temperature=0.0,  # Strict accuracy lock
-            top_p=1.0,        # Unlocks the token pool for optimal highest-probability pathing
-            repeat_penalty=1.1, # Prevents infinite local engine looping bugs
+            top_p=1.0,        
+            repeat_penalty=1.1, 
             stop=["<|im_end|>", "<|im_start|>", "User:", "System:"]
         )
         
-        ai_response = response['choices'][0]['text'].strip()
+        ai_response = response['choices']['text'].strip()
         ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response) # Cleanup formatting artifacts
         
         if len(ai_response) <= 3:
-            ai_response = f"Bayanin Gona: {matched_fact}" if lang == "Hausa" else f"Farming Truth Block: {matched_fact}"
+            ai_response = f"Farming Truth Block: {matched_fact}"
             
         return f"{ai_response}{cultural_closing}"
     except Exception as e:
-        return "An samu matsala wajen sarrafa bayanai." if lang == "Hausa" else f"An error occurred: {e}"
-
+        return f"An error occurred during LLM processing: {e}"
+            
 #=====================================================================
 # DICTIONARY TRANSLATION DICTIONARY (Fixed Missing Tab Elements)
 #=====================================================================
