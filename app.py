@@ -24,20 +24,21 @@ try:
     PDF_LIBS_AVAILABLE = True
 except ImportError:
     PDF_LIBS_AVAILABLE = False
-
 #=====================================================================
 # PATH AND DATA CONTEXT STORAGE SYSTEM
 #=====================================================================
 MODEL_DIR = "models"
 MODEL_NAME = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
 MODEL_PATH = os.path.join(MODEL_DIR, MODEL_NAME)
-
 RAG_DIR = "rag_data"
 CACHE_DIR = "page_cache"
 
 os.makedirs(MODEL_DIR, exist_ok=True)
 os.makedirs(RAG_DIR, exist_ok=True)
 os.makedirs(CACHE_DIR, exist_ok=True)
+
+# FORCE SYSTEM PERMISSIONS IMMEDIATELY AT RUNTIME
+os.chmod(CACHE_DIR, 0o777)
 
 # Google Drive IDs mapped cleanly for automated retrieval scripts
 KNOWLEDGE_BASE = {
