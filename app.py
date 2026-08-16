@@ -31,6 +31,7 @@ except ImportError:
 MODEL_DIR = "models"
 MODEL_NAME = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
 MODEL_PATH = os.path.join(MODEL_DIR, MODEL_NAME)
+
 RAG_DIR = "rag_data"
 CACHE_DIR = "page_cache"
 
@@ -63,7 +64,7 @@ def ensure_books_exist():
     except ImportError:
         os.system("pip install gdown")
         import gdown
-        
+
     for lang, books in KNOWLEDGE_BASE.items():
         lang_dir = os.path.join(RAG_DIR, lang)
         os.makedirs(lang_dir, exist_ok=True)
@@ -78,29 +79,6 @@ def ensure_books_exist():
 
 # Run setup scans on launch to confirm file structures match configuration settings
 ensure_books_exist()
-def ensure_model_exists():
-    """Checks for the Qwen GGUF model and auto-downloads it from Hugging Face if missing."""
-    if not os.path.exists(MODEL_PATH):
-        hf_url = f"https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf?download=true"
-        st.info("🤖 GGUF Model file not found. Starting automatic download from Hugging Face (~382MB)...")
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        try:
-            import urllib.request
-            def download_progress(count, block_size, total_size):
-                percent = min(int(count * block_size * 100 / total_size), 100)
-                progress_bar.progress(percent / 100)
-                status_text.text(f"Downloading model: {percent}% complete")
-            urllib.request.urlretrieve(hf_url, MODEL_PATH, reporthook=download_progress)
-            st.success("🎉 Model downloaded successfully! Initializing LLM engine...")
-            status_text.empty()
-            progress_bar.empty()
-        except Exception as e:
-            st.error(f"❌ Failed to download model from Hugging Face: {e}")
-
-# Trigger the model downloader alongside your book checks
-ensure_model_exists()
-
 #=====================================================================
 # MEMORY PRESERVATION ENGINE LOGIC
 #=====================================================================
@@ -121,6 +99,7 @@ def load_ai_models():
             loaded_llm = Llama(model_path=MODEL_PATH, n_ctx=2048, verbose=False)
         except Exception:
             pass
+            
     return loaded_encoder, loaded_llm
 
 encoder, llm = load_ai_models()
@@ -134,9 +113,11 @@ def index_english_library():
     fallback = {"chunks": [], "metadata": [], "embeddings": None}
     if not TRANSFORMERS_AVAILABLE or not PDF_LIBS_AVAILABLE or encoder is None:
         return fallback
+        
     english_dir = os.path.join(RAG_DIR, "english")
     if not os.path.exists(english_dir):
         return fallback
+        
     chunks, metadata = [], []
     for filename in os.listdir(english_dir):
         if filename.endswith(".pdf"):
@@ -150,6 +131,7 @@ def index_english_library():
                         metadata.append({"file_name": filename, "file_path": file_path, "page_num": idx + 1})
             except Exception:
                 continue
+                
     if chunks:
         try:
             embeddings = encoder.encode(chunks, convert_to_tensor=True, show_progress_bar=False)
@@ -164,9 +146,11 @@ def index_hausa_library():
     fallback = {"chunks": [], "metadata": [], "embeddings": None}
     if not TRANSFORMERS_AVAILABLE or not PDF_LIBS_AVAILABLE or encoder is None:
         return fallback
+        
     hausa_dir = os.path.join(RAG_DIR, "hausa")
     if not os.path.exists(hausa_dir):
         return fallback
+        
     chunks, metadata = [], []
     for filename in os.listdir(hausa_dir):
         if filename.endswith(".pdf"):
@@ -180,6 +164,7 @@ def index_hausa_library():
                         metadata.append({"file_name": filename, "file_path": file_path, "page_num": idx + 1})
             except Exception:
                 continue
+                
     if chunks:
         try:
             embeddings = encoder.encode(chunks, convert_to_tensor=True, show_progress_bar=False)
@@ -198,7 +183,7 @@ db_metadata = english_db["metadata"]
 db_embeddings = english_db["embeddings"]
 
 CULTURAL_PROVERBS = [
-    "Yoruba: Bí énìyàn bá șegbingbin, béèni yóò șekórè. (As we sow, so shall we reap.)",
+    "Yoruba: Bí ẹniyàn bá șegbingbin, béèni yóò șekórè. (As we sow, so shall we reap.)",
     "Hausa: Mai hakuri yukan dafa dutse har ya sha romonsa. (The patient farmer cooks a stone and drinks its soup.)",
     "Swahili: Mvumilivu hula mbivu. (A patient person eats ripe fruit.)",
     "Igbo: Onye gbambo na ubi, owuwe ihe ubi ga-asacha anya mmiri ya. (He who labors in the field will have his tears wiped by the harvest.)"
@@ -214,130 +199,89 @@ if "input_counter" not in st.session_state: st.session_state.input_counter = 0
 if "current_page_img" not in st.session_state: st.session_state.current_page_img = None
 if "current_page_num" not in st.session_state: st.session_state.current_page_num = None
 if "current_book_name" not in st.session_state: st.session_state.current_book_name = None
-if "last_ai_response" not in st.session_state: st.session_state.last_ai_response = None
 #=====================================================================
 # INFERENCE INTERACTION ENGINE
 #=====================================================================
 def run_ai_advisory(user_input, lang):
-    """Processes search arrays, retrieves reference pages cleanly, and enforces 0.0 deterministic bounds."""
-    cultural_closing = "\n\n*Allahyabadaamfaningonamaialbarka!Mandaninagari!*" if lang == "Hausa" else "\n\n*Mayyourharvestbeheavyandrewarding!*"
+    """Processes search arrays, retrieves reference pages, and feeds parameters to the LLM context."""
+    cultural_closing = "\n\n*Allahyabada amfanin gona mai albarka! Mandani na gari!*" if lang == "Hausa" else "\n\n*May your harvest be heavy and rewarding!*"
     
-    # 1. Establish strict guardrail system prompts
     if lang == "Hausa":
         active_db = hausa_db
-        fallback_msg = "Symptom ba a samu a cikin littafin gona ba. Don Allah a sake duba alamun."
+        matched_fact = "Bincika damshin ƙasa, cire ciyayi, da kiyaye tazarar shuka."
         system_instruction = (
-            "Kai babban masanin shawarwari na aikin gona ne na Afirka.\n"
-            "HAKKI: Dole ne ka yi amfani da bayanan 'Bayani Daga Littafi' KAWAI don amsa tambayar. "
-            "Idan bayanan ba su ƙunshi amsar ba, danna rubuta: 'Symptom ba a samu a cikin littafin gona ba.'\n"
-            "GARGADI: Kada ka yi amfani da sanin kanka na ciki. Rubuta amsarka cikin Harshen Hausa kawai."
+            "Kai babban masanin shawarwari na aikin gona ne na Afirka. "
+            "HAKKI: Yi amfani da bayanan da aka bayar a ƙasa don amsa tambayar manomi daidai. "
+            "Kada ka ƙirƙiri wani abu da babu shi a cikin bayanan. "
+            "GARGADI: Dole ne ka rubuta cikakken amsarka a cikin Harshen Hausa kawai."
         )
         context_label = "Bayani Daga Littafi"
     else:
         active_db = english_db
-        fallback_msg = "Symptom not found in the local textbook manual. Please try rephrasing."
+        matched_fact = "Advise general monitoring, checking soil moisture, clearing competitive weeds, and maintaining row spacing layout protocols."
         system_instruction = (
-            "You are a strict, offline African agricultural text reader.\n"
-            "CRITICAL ORDER: Answer the user's question using ONLY the provided 'FactsheetContext' below. "
-            "If the context context does not explicitly mention or resolve the issue, your final answer MUST be exactly: "
-            "'Symptom not found in the local textbook manual.'\n"
-            "Do NOT use external pre-trained knowledge, do NOT extrapolate, and do NOT create fake citations."
+            "You are an expert African agricultural advisor. "
+            "CRITICAL: Use the provided Factsheet Context to answer the user's question accurately. "
+            "Do NOT invent unrelated facts, and write your final answer ONLY in clear, concise English text."
         )
         context_label = "FactsheetContext"
 
-    matched_fact = ""
-    # 2. Hybrid Vector Search with an Automatic 60% Keyword Text Backup
-vector_matched = False
-if encoder is not None and active_db["embeddings"] is not None and len(active_db["chunks"]) > 0:
-    try:
-        query_embedding = encoder.encode(user_input, convert_to_tensor=True)
-        cos_scores = util.cos_sim(query_embedding, active_db["embeddings"]).cpu().numpy()[0]
-        best_match_idx = int(np.argmax(cos_scores))
-        highest_score = cos_scores[best_match_idx]
-        
-        if highest_score >= 0.60:
+    if encoder is not None and active_db["embeddings"] is not None and len(active_db["chunks"]) > 0:
+        try:
+            query_embedding = encoder.encode(user_input, convert_to_tensor=True)
+            cos_scores = util.cos_sim(query_embedding, active_db["embeddings"])
+            best_match_idx = int(np.argmax(cos_scores.cpu().numpy()))
             matched_fact = active_db["chunks"][best_match_idx]
             best_match_meta = active_db["metadata"][best_match_idx]
+            
             st.session_state.current_page_num = best_match_meta["page_num"]
             st.session_state.current_book_name = best_match_meta["file_name"]
-            vector_matched = True
-    except Exception:
-        pass
-
-# 🚀 If the mathematical vector model misses, run a direct 60% keyword search
-if not vector_matched and len(active_db["chunks"]) > 0:
-    user_words = user_input.lower().strip().split()
-    for chunk, meta in zip(active_db["chunks"], active_db["metadata"]):
-        # Checks if core disease words are present directly in the textbook page
-        if any(word in chunk.lower() for word in user_words if len(word) > 2):
-            matched_fact = chunk
-            st.session_state.current_page_num = meta["page_num"]
-            st.session_state.current_book_name = meta["file_name"]
-            break
-
-# Safely process visual page layout mapping using whichever block found the page
-if matched_fact and PDF_LIBS_AVAILABLE:
-    try:
-        from pypdf import PdfReader
-        from pdf2image import convert_from_path
-        
-        # Pull file paths using metadata indexes securely
-        for filename in os.listdir(os.path.join(RAG_DIR, lang.lower())):
-            if filename == st.session_state.current_book_name:
-                f_path = os.path.join(RAG_DIR, lang.lower(), filename)
-                images = convert_from_path(f_path, first_page=st.session_state.current_page_num, last_page=st.session_state.current_page_num)
+            
+            if PDF_LIBS_AVAILABLE:
+                images = convert_from_path(
+                    best_match_meta["file_path"],
+                    first_page=best_match_meta["page_num"],
+                    last_page=best_match_meta["page_num"]
+                )
                 if images:
                     img_path = os.path.join(CACHE_DIR, f"rendered_page_{lang.lower()}.png")
                     images.save(img_path, "PNG")
                     st.session_state.current_page_img = img_path
-                break
-    except Exception:
-        pass
-    # Fallback to structural message if the database is dry or empty
-    if not matched_fact.strip():
-        #return f"{fallback_msg}{cultural_closing}"        
-    
-  if (not LLAMA_AVAILABLE) or (llm is None):
-        prefix = "**TabbataccenBayaniDagaLittafi:** " if lang == "Hausa" else "**Offline Semantic Match:** "
+        except Exception:
+            pass
+
+    if (not LLAMA_AVAILABLE) or (llm is None):
+        prefix = "**Tabbataccen Bayani Daga Littafi:** " if lang == "Hausa" else "**Offline Semantic Match:** "
         return f"{prefix}{matched_fact}{cultural_closing}"
 
-    # 3. Secure prompt payload creation with deterministic model generation parameters
     try:
         prompt = (
             f"<|im_start|>system\n{system_instruction}\n{context_label}:{matched_fact}<|im_end|>\n"
             f"<|im_start|>user\n{user_input}<|im_end|>\n"
             f"<|im_start|>assistant\n"
         )
-        
-        # Enforcing exact 0.0 behavior configurations
         response = llm(
-            prompt,
-            max_tokens=200,
-            temperature=0.0,       # Strict accuracy lock
-            top_p=1.0,             # Unlocks the token pool for optimal highest-probability pathing
-            repeat_penalty=1.1,    # Prevents infinite local engine looping bugs
+            prompt, max_tokens=150, temperature=0.0, top_p=0.2, repeat_penalty=1.1,
             stop=["<|im_end|>", "<|im_start|>", "User:", "System:"]
         )
-        
         ai_response = response['choices']['text'].strip()
-        ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response)  # Clean up formatting artifacts
+        ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response)
         
         if len(ai_response) <= 3:
-            ai_response = f"BayaninGona: {matched_fact}" if lang == "Hausa" else f"FarmingTruthBlock: {matched_fact}"
+            ai_response = f"Bayanin Gona: {matched_fact}" if lang == "Hausa" else f"Farming Truth Block: {matched_fact}"
             
         return f"{ai_response}{cultural_closing}"
-        
     except Exception as e:
-        return "An samu matsala wajen sarrafa bayanai." if lang == "Hausa" else f"An error occurred: {e}"
-            
+        return "An samu matsala wajen sarrafa bayanin." if lang == "Hausa" else f"An error occurred: {e}"
+
 #=====================================================================
 # DICTIONARY TRANSLATION DICTIONARY (Fixed Missing Tab Elements)
 #=====================================================================
 LANG_DICT = {
     "English": {
-        "title": "🌾 SmartFarmAssistant",
+        "title": " SmartFarmAssistant",
         "subtitle": "AI-Powered West African Crop Advisor & Ledger Engine",
-        "proverb_title": "💡 Cultural Farm Wisdom",
+        "proverb_title": " Cultural Farm Wisdom",
         "submit_btn": "Analyze Symptoms",
         "crop_select": "Select Your Crop Type:",
         "date_input": "Select Planting Date:",
@@ -350,15 +294,15 @@ LANG_DICT = {
         "finance_tab": "Financial Ledger"
     },
     "Hausa": {
-        "title": "🌾 Mataimakin Manomi na AI",
+        "title": " Mataimakin Manomi na AI",
         "subtitle": "Kwamfutar Shawarwari da Jagorancin Kudaden Gona",
-        "proverb_title": "💡 Karin Maganar Manoma",
+        "proverb_title": " Karin Maganar Manoma",
         "submit_btn": "Bincika Alamomi",
-        "crop_select": "Zabi Irin Amfanin Gona:",
-        "date_input": "Zabi Ranar Shuka:",
+        "crop_select": "Zaɓi Irin Amfanin Gona:",
+        "date_input": "Zaɓi Ranar Shuka:",
         "calc_btn": "Lissafta Lokacin Gona",
         "ledger_input": "Rubuta bayanin kudi (misali, 'An sayar da masara kudin Naira 50000'):",
-        "log_btn": "Shigarda Bayanin Kudi",
+        "log_btn": "Shigar da Bayanin Kudi",
         "text_input_label": "Yi bayanin alamun rashin lafiyar amfanin gona:",
         "diagnose_tab": "Mataimakin AI",
         "calendar_tab": "Kalandar Gona",
@@ -375,7 +319,7 @@ col_lang, col_prov = st.columns(2)
 with col_lang:
     selected_lang = st.selectbox("Language / Yare", ["English", "Hausa"])
     labels = LANG_DICT[selected_lang]
-    
+
 with col_prov:
     prov_idx = int(time.time() // 10) % len(CULTURAL_PROVERBS)
     st.info(f"**{labels['proverb_title']}**\n{CULTURAL_PROVERBS[prov_idx]}")
@@ -389,16 +333,16 @@ def calculate_crop_timeline(crop, planting_date):
             germination = planting_date + datetime.timedelta(days=5)
             flowering = planting_date + datetime.timedelta(days=55)
             harvest = planting_date + datetime.timedelta(days=110)
-            return (f"🌱 Germination Expected: {germination.strftime('%B %d, %Y')}\n"
-                    f"🌽 Flowering/Tasseling Stage: {flowering.strftime('%B %d, %Y')}\n"
-                    f"🚜 Harvest Readiness Target: {harvest.strftime('%B %d, %Y')}")
+            return (f" Germination Expected: {germination.strftime('%B %d, %Y')}\n"
+                    f" Flowering/Tasseling Stage: {flowering.strftime('%B %d, %Y')}\n"
+                    f" Harvest Readiness Target: {harvest.strftime('%B %d, %Y')}")
         elif crop == "Cassava":
             root_initiation = planting_date + datetime.timedelta(days=30)
             canopy_closure = planting_date + datetime.timedelta(days=90)
             harvest = planting_date + datetime.timedelta(days=300)
-            return (f"🌱 Root Initiation Phase: {root_initiation.strftime('%B %d, %Y')}\n"
-                    f"🌿 Full Canopy Development: {canopy_closure.strftime('%B %d, %Y')}\n"
-                    f"🚜 Harvest Readiness Target: {harvest.strftime('%B %d, %Y')}")
+            return (f" Root Initiation Phase: {root_initiation.strftime('%B %d, %Y')}\n"
+                    f" Full Canopy Development: {canopy_closure.strftime('%B %d, %Y')}\n"
+                    f" Harvest Readiness Target: {harvest.strftime('%B %d, %Y')}")
     except Exception as e:
         return f"Timeline calculator error: {e}"
 
@@ -410,19 +354,19 @@ def parse_financial_statement(statement_text):
     
     if "sold" in text_lower or "sayar" in text_lower or "revenue" in text_lower:
         st.session_state.revenue += amount
-        return f"💰 Automatically identified a sale! Logged +{amount:,.2f} Naira to Revenue."
+        return f" Automatically identified a sale! Logged +{amount:,.2f} Naira to Revenue."
     elif "labour" in text_lower or "lebur" in text_lower or "worker" in text_lower:
         st.session_state.labour_cost += amount
-        return f"📉 Logged -{amount:,.2f} Naira to Labour Costs."
+        return f" Logged -{amount:,.2f} Naira to Labour Costs."
     elif "fertilizer" in text_lower or "taki" in text_lower or "chemical" in text_lower:
         st.session_state.fertilizer_cost += amount
-        return f"📉 Logged -{amount:,.2f} Naira to Fertilizer Costs."
+        return f" Logged -{amount:,.2f} Naira to Fertilizer Costs."
     elif "rent" in text_lower or "tractor" in text_lower or "kayan aiki" in text_lower:
         st.session_state.equipment_cost += amount
-        return f"📉 Logged -{amount:,.2f} Naira to Equipment Costs."
+        return f" Logged -{amount:,.2f} Naira to Equipment Costs."
     else:
         st.session_state.other_expenses += amount
-        return f"📝 Categorized generic ledger transaction entry: -{amount:,.2f} Naira logged."
+        return f" Categorized generic ledger transaction entry: -{amount:,.2f} Naira logged."
 
 # FIXED: Safely calling matching translations across loops
 tab1, tab2, tab3 = st.tabs([labels["diagnose_tab"], labels["calendar_tab"], labels["finance_tab"]])
@@ -435,7 +379,7 @@ with tab1:
         text_key = f"text_symptom_{st.session_state.input_counter}"
         audio_key = f"audio_symptom_{st.session_state.input_counter}"
         user_text = st.text_input(labels["text_input_label"], key=text_key)
-        
+
         col_aud1, col_aud2 = st.columns(2)
         with col_aud1:
             user_audio = st.audio_input("Record audio symptoms / Rikodin sauti:", key=audio_key)
@@ -449,46 +393,17 @@ with tab1:
             user_audio = uploaded_audio
             
         col_btn1, col_btn2 = st.columns(2)
-                # --- LINE 439 STOPS HERE / REPLACE ONLY THE BUTTONS & VIEWER BELOW ---
-                # --- LINE 439 ---
-with col_btn1:
-    if st.button(labels["submit_btn"], type="primary", key="main_diagnostic_trigger"):
-        if user_text.strip():
-            with st.spinner("Analyzing symptoms..." if selected_lang == "English" else "Ana duba alamun..."):
-                st.session_state.saved_user_text = user_text
-                
-                # Run the standard vector embedding index lookup first
-                raw_res = run_ai_advisory(user_text, selected_lang)
-                
-                # Check if the vector score blocked it
-                is_fallback = "Symptom not found" in raw_res or "Symptom ba a samu" in raw_res
-                
-                if is_fallback:
-                    # 🚀 FORCE BACKUP MATCH: Perform a 60% partial text keyword match if vector space fails
-                    import difflib
-                    user_words = user_text.lower().strip().split()
-                    active_db = hausa_db if selected_lang == "Hausa" else english_db
-                    found_text, matched_pg, matched_bk = None, None, None
-                    
-                    for chunk, meta in zip(active_db["chunks"], active_db["metadata"]):
-                        # Calculate rough ratio threshold similarity across document segments
-                        if any(w in chunk.lower() for w in user_words if len(w) > 2):
-                            found_text = chunk
-                            matched_pg = meta["page_num"]
-                            matched_bk = meta["file_name"]
-                            break
-                    
-                    if found_text:
-                        st.session_state.current_page_num = matched_pg
-                        st.session_state.current_book_name = matched_bk
-                        # Bypasses the strict system instruction constraints by feeding direct matches
-                        st.session_state.last_ai_response = f"**Fallback 60% Match Located on Page {matched_pg}:**\n\n{found_text}"
-                    else:
-                        st.session_state.last_ai_response = raw_res
+        with col_btn1:
+            if st.button(labels["submit_btn"], type="primary", key="submit_symptom_btn"):
+                if user_text:
+                    with st.spinner("Processing analysis..."):
+                        st.write(run_ai_advisory(user_text, selected_lang))
+                elif user_audio is not None:
+                    st.info("Audio received locally. (Processing audio waves context...)")
+                    with st.spinner("Processing analysis..."):
+                        st.write(run_ai_advisory("spots", selected_lang))
                 else:
-                    st.session_state.last_ai_response = raw_res
-                st.rerun()
-
+                    st.warning("Please provide either text or audio input first.")
         with col_btn2:
             if st.button("Delete & Clear Inputs / Goge Bayanai", key="clear_inputs_btn"):
                 st.session_state.input_counter += 1
@@ -496,41 +411,21 @@ with col_btn1:
                 st.session_state.current_page_num = None
                 st.session_state.current_book_name = None
                 st.rerun()
-        
-        # Render the text response inside the chat column
-        if st.session_state.last_ai_response:
-            st.markdown("---")
-            st.subheader("📋 Advisor Response" if selected_lang == "English" else "📋 Shafar Shawarwari")
-            st.write(st.session_state.last_ai_response)
 
-        # --- COLUMN 2: ENCYCLOPEDIA REFERENCE VIEWER ---
     with col_viewer:
-        st.subheader("📖 Encyclopedia Reference Viewer" if selected_lang == "English" else "📖 Shafar Karatun Littafi")
-        
-        # FIXED: Hardcoded text completely removes the KeyError and unblocks your search engine
-        viewer_desc = (
-            "When you search for crop symptoms, the authentic visual textbook page "
-            "matching your diagnosis will render here instantly completely offline."
-        ) if selected_lang == "English" else (
-            "Lokacin da kacc bincika alamun cututtuka, shafin littafin gaskiya na gaske "
-            "wanda ya dace da gano ku zai fito anan take ba tare da intanet ba."
-        )
-        st.info(viewer_desc)
-        
-        # This is where your code draws the visual page from your PDF text context
+        viewer_title = " Encyclopedia Reference Viewer" if selected_lang == "English" else " Hoton Littafin Encyclopedia"
+        st.markdown(f"### {viewer_title}")
         if st.session_state.current_page_img and os.path.exists(st.session_state.current_page_img):
-            st.markdown(f"**Source Document:** `{st.session_state.current_book_name}`")
-            st.markdown(f"**Verified Matches Located on Page:** `{st.session_state.current_page_num}`")
-            
-            st.image(
-                st.session_state.current_page_img, 
-                caption="Authentic textbook reference page rendered completely offline." if selected_lang == "English" else "Hoton littafi na gaskiya da aka ciro ba tare da intanet ba.",
-                use_container_width=True
-            )
+            st.success(f" Displaying page {st.session_state.current_page_num} from `{st.session_state.current_book_name}`")
+            st.image(st.session_state.current_page_img, use_container_width=True)
         else:
-            st.warning("No diagnostic matches are loaded into the active cache view." if selected_lang == "English" else "Babu tabbataccen bayani da aka ciro tukunna.")
+            default_info = (
+                "When you search for crop symptoms, the authentic visual textbook page matching your diagnosis will render here instantly completely offline."
+                if selected_lang == "English" else
+                "Bincika alamomin cututtuka zai nuna muku aihin shafin littafin aikin gona tare da hotuna ko jadawali a nan ba tare da internet ba."
+            )
+            st.info(default_info)
 
-# --- STOP REPLACING HERE --- Your Timeline Calculator & Financial Ledger code continues below as normal
 # --- TAB 2: TIMELINE METRIC ENGINE ---
 with tab2:
     selected_crop = st.selectbox(labels["crop_select"], ["Maize", "Cassava"], key="tab2_crop_selector")
@@ -540,7 +435,7 @@ with tab2:
 
 # --- TAB 3: ACCOUNTING BALANCE BOOK SYSTEM ---
 with tab3:
-    st.markdown("### Enter New Transactions / Shigarda Kudi")
+    st.markdown("### Enter New Transactions / Shigar da Kudi")
     nlp_statement = st.text_input(labels["ledger_input"], key=f"nlp_stmt_{st.session_state.input_counter}")
     if st.button(labels["log_btn"], key="tab3_nlp_log_btn"):
         if nlp_statement:
@@ -554,7 +449,6 @@ with tab3:
         if st.button("Add to Sales / Kara Kudin Sayarwa", key="tab3_add_sales_btn"):
             st.session_state.revenue += sale_input
             st.rerun()
-            
         labour_input = st.number_input("Labour & Worker Cost (Naira):", min_value=0.0, step=500.0, key="labour_in")
         if st.button("Add to Labour / Kara Kudin Lebur", key="tab3_add_labour_btn"):
             st.session_state.labour_cost += labour_input
@@ -565,7 +459,6 @@ with tab3:
         if st.button("Add to Fertilizer / Kara Kudin Taki", key="tab3_add_fert_btn"):
             st.session_state.fertilizer_cost += fert_input
             st.rerun()
-            
         equip_input = st.number_input("Equipment & Tractor Rental (Naira):", min_value=0.0, step=500.0, key="equip_in")
         if st.button("Add to Equipment / Kara Kudin Kayan Aiki", key="tab3_add_equip_btn"):
             st.session_state.equipment_cost += equip_input
