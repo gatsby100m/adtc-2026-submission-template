@@ -217,26 +217,26 @@ if "current_book_name" not in st.session_state: st.session_state.current_book_na
 #=====================================================================
 def run_ai_advisory(user_input, lang):
     """Processes search arrays, retrieves reference pages cleanly, and enforces 0.0 deterministic bounds."""
-    cultural_closing = "\n\n*Allahyabada amfanin gona mai albarka! Mandani na gari!*" if lang == "Hausa" else "\n\n*May your harvest be heavy and rewarding!*"
+    cultural_closing = "\n\n*Allahyabadaamfaningonamaialbarka!Mandaninagari!*" if lang == "Hausa" else "\n\n*Mayyourharvestbeheavyandrewarding!*"
     
     # 1. Establish strict guardrail system prompts
     if lang == "Hausa":
         active_db = hausa_db
-        fallback_msg = "Symptom ba a samu a cikin littafin gona ba. Don Allah a sake duba alamun."
+        fallback_msg = "Symptombaasamuacikinlittafingonaba.DonAllahasakedubaalamun."
         system_instruction = (
             "Kai babban masanin shawarwari na aikin gona ne na Afirka.\n"
             "HAKKI: Dole ne ka yi amfani da bayanan 'Bayani Daga Littafi' KAWAI don amsa tambayar."
-            "Idan bayanan ba su ƙunshi amsar ba, danna rubuta: 'Symptom ba a samu a cikin littafin gona ba.'\n"
+            "Idan bayanan ba su ƙunshi amsar ba, dan na rubuta: 'Symptom ba a samu a cikin littafin gona ba.'\n"
             "GARGADI: Kada ka yi amfani da sanin kanka na ciki. Rubuta amsarka cikin Harshen Hausa kawai."
         )
-        context_label = "Bayani Daga Littafi"
+        context_label = "BayaniDagaLittafi"
     else:
         active_db = english_db
         fallback_msg = "Symptom not found in the local textbook manual. Please try rephrasing."
         system_instruction = (
             "You are a strict, offline African agricultural text reader.\n"
             "CRITICAL ORDER: Answer the user's question using ONLY the provided 'FactsheetContext' below."
-            "If the context context does not explicitly mention or resolve the issue, your final answer MUST be exactly:"
+            "If the context does not explicitly mention or resolve the issue, your final answer MUST be exactly:"
             "'Symptom not found in the local textbook manual.'\n"
             "Do NOT use external pre-trained knowledge, do NOT extrapolate, and do NOT create fake citations."
         )
@@ -267,22 +267,23 @@ def run_ai_advisory(user_input, lang):
                     )
                     if images:
                         img_path = os.path.join(CACHE_DIR, f"rendered_page_{lang.lower()}.png")
-                        images.save(img_path, "PNG")
+                        # FIX: convert_from_path returns a list; access index 0 to save the image
+                        images[0].save(img_path, "PNG")
                         st.session_state.current_page_img = img_path
             else:
                 # Force fallback if similarity score is too low
                 return f"{fallback_msg}{cultural_closing}"
-        except Exception:
-            pass
-
+        except Exception as e:
+            st.error(f"Error rendering PDF page image: {e}")
+            
     # Fallback to structural message if the database is dry or empty
     if not matched_fact.strip():
         return f"{fallback_msg}{cultural_closing}"
-
+        
     if (not LLAMA_AVAILABLE) or (llm is None):
-        prefix = "**Tabbataccen Bayani Daga Littafi:** " if lang == "Hausa" else "**Offline Semantic Match:** "
+        prefix = "**Tabbataccen Bayani Daga Littafi:**" if lang == "Hausa" else "**Offline Semantic Match:**"
         return f"{prefix}{matched_fact}{cultural_closing}"
-
+        
     # 3. Secure prompt payload creation with deterministic model generation parameters
     try:
         prompt = (
@@ -290,6 +291,7 @@ def run_ai_advisory(user_input, lang):
             f"<|im_start|>user\n{user_input}<|im_end|>\n"
             f"<|im_start|>assistant\n"
         )
+        
         # Enforcing exact 0.0 behavior configurations
         response = llm(
             prompt,
@@ -299,8 +301,9 @@ def run_ai_advisory(user_input, lang):
             repeat_penalty=1.1, # Prevents infinite local engine looping bugs
             stop=["<|im_end|>", "<|im_start|>", "User:", "System:"]
         )
-        ai_response = response['choices']['text'].strip()
-        ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response)  # Cleanup formatting artifacts
+        
+        ai_response = response['choices'][0]['text'].strip()
+        ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response) # Cleanup formatting artifacts
         
         if len(ai_response) <= 3:
             ai_response = f"Bayanin Gona: {matched_fact}" if lang == "Hausa" else f"Farming Truth Block: {matched_fact}"
