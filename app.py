@@ -479,36 +479,134 @@ with tab2:
     planting_date = st.date_input(labels["date_input"], datetime.date.today(), key="tab2_date_picker")
     if st.button(labels["calc_btn"], key="tab2_generate_timeline_btn"):
         st.text(calculate_crop_timeline(selected_crop, planting_date))
-
-# --- TAB 3: ACCOUNTING BALANCE BOOK SYSTEM ---
+# --- TAB 3: FINANCIAL LEDGER ---
 with tab3:
     st.markdown("### Enter New Transactions / Shigar da Kudi")
-    nlp_statement = st.text_input(labels["ledger_input"], key=f"nlp_stmt_{st.session_state.input_counter}")
-    if st.button(labels["log_btn"], key="tab3_nlp_log_btn"):
+    nlp_statement = st.text_input(
+        labels["ledger_input"],
+        key=f"nlp_stmt_{st.session_state.get('input_counter', 0)}"
+    )
+    if st.button(labels["log_btn"]):
         if nlp_statement:
-            st.info(parse_financial_statement(nlp_statement))
-            st.rerun()
+            # Safely unpack the single number matrix directly from your custom parser
+            text_lower = nlp_statement.lower()
+            numbers = [float(s) for s in re.findall(r'\d+', text_lower)]
+            amount = numbers[0] if numbers else 0.0
             
+            # Context transaction classification layout engine routing rules
+            if "sold" in text_lower or "sayar" in text_lower or "revenue" in text_lower:
+                st.session_state.revenue += amount
+                st.info(f" Automatically identified a sale! Logged +{amount:,.2f} Naira to Revenue.")
+            elif "labour" in text_lower or "lebur" in text_lower or "worker" in text_lower:
+                st.session_state.labour_cost += amount
+                st.info(f" Logged -{amount:,.2f} Naira to Labour Costs.")
+            elif "fertilizer" in text_lower or "taki" in text_lower or "chemical" in text_lower:
+                st.session_state.fertilizer_cost += amount
+                st.info(f" Logged -{amount:,.2f} Naira to Fertilizer Costs.")
+            elif "rent" in text_lower or "tractor" in text_lower or "kayan aiki" in text_lower:
+                st.session_state.equipment_cost += amount
+                st.info(f" Logged -{amount:,.2f} Naira to Equipment Costs.")
+            else:
+                st.session_state.other_expenses += amount
+                st.info(f" Categorized generic ledger transaction entry: -{amount:,.2f} Naira logged.")
+            st.rerun()
+
     st.markdown("---")
     col_in1, col_in2 = st.columns(2)
     with col_in1:
         sale_input = st.number_input("Crop Sales Revenue (Naira):", min_value=0.0, step=500.0, key="sale_in")
-        if st.button("Add to Sales / Kara Kudin Sayarwa", key="tab3_add_sales_btn"):
+        if st.button("Add to Sales / Kara Kudin Sayarwa"):
             st.session_state.revenue += sale_input
+            st.success(f"Added +{sale_input:,.2f} Naira to Sales!")
             st.rerun()
+
         labour_input = st.number_input("Labour & Worker Cost (Naira):", min_value=0.0, step=500.0, key="labour_in")
-        if st.button("Add to Labour / Kara Kudin Lebur", key="tab3_add_labour_btn"):
+        if st.button("Add to Labour / Kara Kudin Lebur"):
             st.session_state.labour_cost += labour_input
+            st.success(f"Added -{labour_input:,.2f} Naira to Labour!")
             st.rerun()
-            
+
     with col_in2:
         fert_input = st.number_input("Fertilizer & Chemicals Cost (Naira):", min_value=0.0, step=500.0, key="fert_in")
-        if st.button("Add to Fertilizer / Kara Kudin Taki", key="tab3_add_fert_btn"):
+        if st.button("Add to Fertilizer / Kara Kudin Taki"):
             st.session_state.fertilizer_cost += fert_input
+            st.success(f"Added -{fert_input:,.2f} Naira to Fertilizer!")
             st.rerun()
+
         equip_input = st.number_input("Equipment & Tractor Rental (Naira):", min_value=0.0, step=500.0, key="equip_in")
-        if st.button("Add to Equipment / Kara Kudin Kayan Aiki", key="tab3_add_equip_btn"):
+        if st.button("Add to Equipment / Kara Kudin KayanAiki"):
             st.session_state.equipment_cost += equip_input
+            st.success(f"Added -{equip_input:,.2f} Naira to Equipment!")
             st.rerun()
-            
+
     st.markdown("---")
+    st.markdown("### Farm Profit & Loss Summary / Bayanin Riba da Asara")
+    total_costs = (
+        st.session_state.labour_cost +
+        st.session_state.fertilizer_cost +
+        st.session_state.equipment_cost +
+        st.session_state.other_expenses
+    )
+    net_profit = st.session_state.revenue - total_costs
+
+    st.metric("Total Sales Revenue / Kudin Sayarwa (+)", f"{st.session_state.revenue:,.2f} Naira")
+    
+    col_metrics1, col_metrics2 = st.columns(2)
+    with col_metrics1:
+        st.metric("Labour Costs / Kudin Lebur (-)", f"{st.session_state.labour_cost:,.2f} Naira")
+        st.metric("Fertilizer & Chemicals / Kudin Taki (-)", f"{st.session_state.fertilizer_cost:,.2f} Naira")
+    with col_metrics2:
+        st.metric("Equipment & Tractor / Kayan Aiki (-)", f"{st.session_state.equipment_cost:,.2f} Naira")
+        st.metric("Other Expenses / Kudaden Fitarwa (-)", f"{st.session_state.other_expenses:,.2f} Naira")
+
+    st.markdown("---")
+    if net_profit >= 0:
+        st.success(f"**Net Profit / Riba Ta Tabbata:** {net_profit:,.2f} Naira")
+    else:
+        st.error(f"**Net Operating Loss / Asara Ta Fito:** {abs(net_profit):,.2f} Naira")
+
+    if st.button("Reset Ledger / Goge Dukan Bayanan Kudi", type="secondary"):
+        st.session_state.revenue = 0.0
+        st.session_state.labour_cost = 0.0
+        st.session_state.fertilizer_cost = 0.0
+        st.session_state.equipment_cost = 0.0
+        st.session_state.other_expenses = 0.0
+        st.success("Ledger cleared successfully!")
+        st.rerun()
+
+    st.subheader("Save Records Locally")
+    current_ledger_data = {
+        "Revenue": [st.session_state.get('revenue', 0.0)],
+        "LabourCost": [st.session_state.get('labour_cost', 0.0)],
+        "FertilizerCost": [st.session_state.get('fertilizer_cost', 0.0)],
+        "EquipmentCost": [st.session_state.get('equipment_cost', 0.0)],
+        "OtherExpenses": [st.session_state.get('other_expenses', 0.0)]
+    }
+
+    if st.button("Save Ledger to Laptop", key="save_ledger_tab3_btn"):
+        try:
+            import pandas as pd
+            df = pd.DataFrame(current_ledger_data)
+            file_name = "ledger_backup.csv"
+            df.to_csv(file_name, index=False)
+            absolute_path = os.path.abspath(file_name)
+            st.success(f"Saved successfully to your laptop at:\n`{absolute_path}`")
+        except Exception as e:
+            st.error(f"Failed to save: {e}")
+
+    st.markdown("---")
+    st.subheader("Download Ledger File")
+    st.write("Download the current ledger data directly through your web browser.")
+    try:
+        import pandas as pd
+        df = pd.DataFrame(current_ledger_data)
+        csv_data = df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="⬇ Download Ledger as CSV",
+            data=csv_data,
+            file_name="ledger_download.csv",
+            mime="text/csv",
+            key="download_ledger_tab3_btn"
+        )
+    except Exception as download_error:
+        st.info("Please fill in or save your ledger data above to enable downloading.")
