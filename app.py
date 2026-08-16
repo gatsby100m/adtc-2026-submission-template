@@ -79,6 +79,29 @@ def ensure_books_exist():
 
 # Run setup scans on launch to confirm file structures match configuration settings
 ensure_books_exist()
+
+def ensure_model_exists():
+    """Checks for the Qwen GGUF model and auto-downloads it from Hugging Face if missing."""
+    if not os.path.exists(MODEL_PATH):
+        hf_url = f"https://huggingface.co"
+        st.info(" GGUF Model file not found. Starting automatic download from Hugging Face (~382MB)...")
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        try:
+            import urllib.request
+            def download_progress(count, block_size, total_size):
+                percent = min(int(count * block_size * 100 / total_size), 100)
+                progress_bar.progress(percent / 100)
+                status_text.text(f"Downloading model: {percent}% complete")
+            urllib.request.urlretrieve(hf_url, MODEL_PATH, reporthook=download_progress)
+            st.success(" Model downloaded successfully! Initializing LLM engine...")
+            status_text.empty()
+            progress_bar.empty()
+        except Exception as e:
+            st.error(f" Failed to download model from Hugging Face: {e}")
+
+# Trigger the model downloader alongside your book checks
+ensure_model_exists()
 #=====================================================================
 # MEMORY PRESERVATION ENGINE LOGIC
 #=====================================================================
@@ -87,19 +110,16 @@ def load_ai_models():
     """Safely instantiates embedding models and local quantized LLM cores in global space."""
     loaded_encoder = None
     loaded_llm = None
-    
     if TRANSFORMERS_AVAILABLE:
         try:
             loaded_encoder = SentenceTransformer("all-MiniLM-L6-v2")
         except Exception:
             pass
-            
     if LLAMA_AVAILABLE and os.path.exists(MODEL_PATH):
         try:
             loaded_llm = Llama(model_path=MODEL_PATH, n_ctx=2048, verbose=False)
         except Exception:
             pass
-            
     return loaded_encoder, loaded_llm
 
 encoder, llm = load_ai_models()
@@ -113,11 +133,9 @@ def index_english_library():
     fallback = {"chunks": [], "metadata": [], "embeddings": None}
     if not TRANSFORMERS_AVAILABLE or not PDF_LIBS_AVAILABLE or encoder is None:
         return fallback
-        
     english_dir = os.path.join(RAG_DIR, "english")
     if not os.path.exists(english_dir):
         return fallback
-        
     chunks, metadata = [], []
     for filename in os.listdir(english_dir):
         if filename.endswith(".pdf"):
@@ -131,7 +149,6 @@ def index_english_library():
                         metadata.append({"file_name": filename, "file_path": file_path, "page_num": idx + 1})
             except Exception:
                 continue
-                
     if chunks:
         try:
             embeddings = encoder.encode(chunks, convert_to_tensor=True, show_progress_bar=False)
@@ -146,11 +163,9 @@ def index_hausa_library():
     fallback = {"chunks": [], "metadata": [], "embeddings": None}
     if not TRANSFORMERS_AVAILABLE or not PDF_LIBS_AVAILABLE or encoder is None:
         return fallback
-        
     hausa_dir = os.path.join(RAG_DIR, "hausa")
     if not os.path.exists(hausa_dir):
         return fallback
-        
     chunks, metadata = [], []
     for filename in os.listdir(hausa_dir):
         if filename.endswith(".pdf"):
@@ -164,7 +179,6 @@ def index_hausa_library():
                         metadata.append({"file_name": filename, "file_path": file_path, "page_num": idx + 1})
             except Exception:
                 continue
-                
     if chunks:
         try:
             embeddings = encoder.encode(chunks, convert_to_tensor=True, show_progress_bar=False)
@@ -226,17 +240,20 @@ def run_ai_advisory(user_input, lang):
         )
         context_label = "FactsheetContext"
 
-    if encoder is not None and active_db["embeddings"] is not None and len(active_db["chunks"]) > 0:
+    # CRITICAL TRACKING CHECK: Only run lookups if documents actually exist inside memory structures
+    if (encoder is not None and 
+        active_db is not None and 
+        active_db.get("embeddings") is not None and 
+        len(active_db.get("chunks", [])) > 0):
         try:
             query_embedding = encoder.encode(user_input, convert_to_tensor=True)
             cos_scores = util.cos_sim(query_embedding, active_db["embeddings"])
             best_match_idx = int(np.argmax(cos_scores.cpu().numpy()))
+            # Safe access confirmed via numeric list validation parameters
             matched_fact = active_db["chunks"][best_match_idx]
             best_match_meta = active_db["metadata"][best_match_idx]
-            
             st.session_state.current_page_num = best_match_meta["page_num"]
             st.session_state.current_book_name = best_match_meta["file_name"]
-            
             if PDF_LIBS_AVAILABLE:
                 images = convert_from_path(
                     best_match_meta["file_path"],
@@ -249,6 +266,10 @@ def run_ai_advisory(user_input, lang):
                     st.session_state.current_page_img = img_path
         except Exception:
             pass
+    else:
+        # Graceful notice letting you know the database folders are currently blank
+        msg = " Library index empty. Please ensure your PDFs are in 'rag_data/' directory!" if lang == "English" else " Littattafan bayani babu su. Da fatan za a duba babban fayil na 'rag_data/'!"
+        return f"{msg}{cultural_closing}"
 
     if (not LLAMA_AVAILABLE) or (llm is None):
         prefix = "**Tabbataccen Bayani Daga Littafi:** " if lang == "Hausa" else "**Offline Semantic Match:** "
@@ -264,12 +285,10 @@ def run_ai_advisory(user_input, lang):
             prompt, max_tokens=150, temperature=0.0, top_p=0.2, repeat_penalty=1.1,
             stop=["<|im_end|>", "<|im_start|>", "User:", "System:"]
         )
-        ai_response = response['choices']['text'].strip()
+        ai_response = response['choices'][0]['text'].strip()
         ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response)
-        
         if len(ai_response) <= 3:
             ai_response = f"Bayanin Gona: {matched_fact}" if lang == "Hausa" else f"Farming Truth Block: {matched_fact}"
-            
         return f"{ai_response}{cultural_closing}"
     except Exception as e:
         return "An samu matsala wajen sarrafa bayanin." if lang == "Hausa" else f"An error occurred: {e}"
@@ -298,9 +317,9 @@ LANG_DICT = {
         "subtitle": "Kwamfutar Shawarwari da Jagorancin Kudaden Gona",
         "proverb_title": " Karin Maganar Manoma",
         "submit_btn": "Bincika Alamomi",
-        "crop_select": "Zaɓi Irin Amfanin Gona:",
-        "date_input": "Zaɓi Ranar Shuka:",
-        "calc_btn": "Lissafta Lokacin Gona",
+        "crop_select": "ZabiIrinAmfaninGona:",
+        "date_input": "ZabiRanarShuka:",
+        "calc_btn": "LissaftaLokacinGona",
         "ledger_input": "Rubuta bayanin kudi (misali, 'An sayar da masara kudin Naira 50000'):",
         "log_btn": "Shigar da Bayanin Kudi",
         "text_input_label": "Yi bayanin alamun rashin lafiyar amfanin gona:",
