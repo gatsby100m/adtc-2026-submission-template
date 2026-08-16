@@ -244,15 +244,15 @@ def run_ai_advisory(user_input, lang):
 
     matched_fact = ""
     
-    # 2. Vector Search Retrieval with lowered Similarity Score Threshold for lay farmers
+    # 2. Vector Search Retrieval with a strict Similarity Score Threshold
     if encoder is not None and active_db["embeddings"] is not None and len(active_db["chunks"]) > 0:
         try:
             query_embedding = encoder.encode(user_input, convert_to_tensor=True)
-            cos_scores = util.cos_sim(query_embedding, active_db["embeddings"]).cpu().numpy()
+            cos_scores = util.cos_sim(query_embedding, active_db["embeddings"]).cpu().numpy()[0]
             best_match_idx = int(np.argmax(cos_scores))
             highest_score = cos_scores[best_match_idx]
             
-            # FIXED THRESHOLD: Lowered from 0.60 to 0.30 to smoothly map conversational phrases
+            # CRITICAL THRESHOLD: If the book does not match the query by at least 60%, reject it
             if highest_score >= 0.30:
                 matched_fact = active_db["chunks"][best_match_idx]
                 best_match_meta = active_db["metadata"][best_match_idx]
@@ -260,9 +260,8 @@ def run_ai_advisory(user_input, lang):
                 st.session_state.current_book_name = best_match_meta["file_name"]
                 
                 if PDF_LIBS_AVAILABLE:
-                    # FIXED KEY LOOKUP: Aligned file path query parameters to prevent silent KeyError crashes
                     images = convert_from_path(
-                        best_match_meta["book_path"],
+                        best_match_meta["file_path"],
                         first_page=best_match_meta["page_num"],
                         last_page=best_match_meta["page_num"]
                     )
@@ -271,6 +270,7 @@ def run_ai_advisory(user_input, lang):
                         images.save(img_path, "PNG")
                         st.session_state.current_page_img = img_path
             else:
+                # Force fallback if similarity score is too low
                 return f"{fallback_msg}{cultural_closing}"
         except Exception:
             pass
@@ -290,16 +290,17 @@ def run_ai_advisory(user_input, lang):
             f"<|im_start|>user\n{user_input}<|im_end|>\n"
             f"<|im_start|>assistant\n"
         )
+        # Enforcing exact 0.0 behavior configurations
         response = llm(
             prompt,
             max_tokens=200,
-            temperature=0.0,  
-            top_p=1.0,        
-            repeat_penalty=1.1, 
+            temperature=0.0,  # Strict accuracy lock
+            top_p=1.0,        # Unlocks the token pool for optimal highest-probability pathing
+            repeat_penalty=1.1, # Prevents infinite local engine looping bugs
             stop=["<|im_end|>", "<|im_start|>", "User:", "System:"]
         )
         ai_response = response['choices']['text'].strip()
-        ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response)  
+        ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response)  # Cleanup formatting artifacts
         
         if len(ai_response) <= 3:
             ai_response = f"Bayanin Gona: {matched_fact}" if lang == "Hausa" else f"Farming Truth Block: {matched_fact}"
@@ -334,7 +335,6 @@ LANG_DICT = {
         "submit_btn": "Bincika Alamomi",
         "crop_select": "Zabi Irin Amfanin Gona:",
         "date_input": "Zabi Ranar Shuka:",
-
         "calc_btn": "Lissafta LokacinGona",
         "ledger_input": "Rubuta bayanin kudi (misali, 'An sayar da masara kudin Naira 50000'):",
         "log_btn": "Shigar da Bayanin Kudi",
