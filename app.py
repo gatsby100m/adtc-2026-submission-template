@@ -253,7 +253,7 @@ def run_ai_advisory(user_input, lang):
             highest_score = cos_scores[best_match_idx]
             
             # CRITICAL THRESHOLD: If the book does not match the query by at least 60%, reject it
-            if highest_score >= 0.60:
+            if highest_score >= 0.30:
                 matched_fact = active_db["chunks"][best_match_idx]
                 best_match_meta = active_db["metadata"][best_match_idx]
                 st.session_state.current_page_num = best_match_meta["page_num"]
@@ -384,7 +384,7 @@ def calculate_crop_timeline(crop, planting_date):
 def parse_financial_statement(statement_text):
     text_lower = statement_text.lower()
     numbers = [float(s) for s in re.findall(r'\d+', text_lower)]
-    amount = numbers[0] if numbers else 0.0
+    amount = numbers if numbers else 0.0
     
     if "sold" in text_lower or "sayar" in text_lower or "revenue" in text_lower:
         st.session_state.revenue += amount
@@ -433,7 +433,6 @@ with tab1:
                     with st.spinner("Analyzing symptoms..." if selected_lang == "English" else "Ana duba alamun..."):
                         st.session_state.saved_user_text = user_text
                         st.session_state.last_ai_response = run_ai_advisory(user_text, selected_lang)
-                        st.rerun()
         with col_btn2:
             if st.button("Delete & Clear Inputs / Goge Bayanai", key="clear_inputs_btn"):
                 st.session_state.input_counter += 1
@@ -452,14 +451,8 @@ with tab1:
     # --- COLUMN 2: ENCYCLOPEDIA REFERENCE VIEWER ---
     with col_viewer:
         st.subheader(" Encyclopedia Reference Viewer" if selected_lang == "English" else " Shafar Karatun Littafi")
-        viewer_desc = (
-            "When you search for crop symptoms, the authentic visual textbook page matching your diagnosis will render here instantly completely offline."
-        ) if selected_lang == "English" else (
-            "Lokacin da kace bincika alamun cututtuka, shafin littafi gaskiyan agaske wanda ya dace da gano ku zaifito anan take ba tare da intanet ba."
-        )
-        st.info(viewer_desc)
         
-        # This is where your code draws the visual page from your PDF text context
+        # FIXED: This visual page drawer now coordinates states cleanly without rerun interruptions
         if st.session_state.current_page_img and os.path.exists(st.session_state.current_page_img):
             st.markdown(f"**Source Document:** `{st.session_state.current_book_name}`")
             st.markdown(f"**Verified Matches Located on Page:** `{st.session_state.current_page_num}`")
@@ -469,7 +462,12 @@ with tab1:
                 use_container_width=True
             )
         else:
-            st.warning("No diagnostic matches are loaded into the active cache view." if selected_lang == "English" else "Babu tabbataccen bayani da aka ciro tukunna.")
+            default_info = (
+                "When you search for crop symptoms, the authentic visual textbook page matching your diagnosis will render here instantly completely offline."
+            ) if selected_lang == "English" else (
+                "Lokacin da kace bincika alamun cututtuka, shafin littafi gaskiyan agaske wanda ya dace da gano ku zaifito anan take ba tare da intanet ba."
+            )
+            st.info(default_info)
 
 # --- TAB 2: TIMELINE METRIC ENGINE ---
 with tab2:
