@@ -218,12 +218,12 @@ if "current_book_name" not in st.session_state: st.session_state.current_book_na
 #=====================================================================
 def run_ai_advisory(user_input, lang):
     """Processes search arrays, retrieves reference pages cleanly, and enforces 0.0 deterministic bounds."""
-    cultural_closing = "\n\n*Allahyabadaamfaningonamaialbarka!Mandaninagari!*" if lang == "Hausa" else "\n\n*Mayyourharvestbeheavyandrewarding!*"
+    cultural_closing = "\n\n*Allahu ya ba da amfanin gona mai albarka! Madalla da yin nagari!*" if lang == "Hausa" else "\n\n*Mayyourharvestbeheavyandrewarding!*"
     
     # 1. Establish strict guardrail system prompts
     if lang == "Hausa":
         active_db = hausa_db
-        fallback_msg = "Symptombaasamuacikinlittafingonaba.DonAllahasakedubaalamun."
+        fallback_msg = "Ba a sami alamun cutar a cikin littafin gona ba. Don Allah a sake duba alamun."
         system_instruction = (
             "Kai babban masanin shawarwari na aikin gona ne na Afirka.\n"
             "HAKKI: Dole ne ka yi amfani da bayanan 'Bayani Daga Littafi' KAWAI don amsa tambayar."
