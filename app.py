@@ -62,23 +62,32 @@ def ensure_books_exist():
     try:
         import gdown
     except ImportError:
-        os.system("pip install gdown")
-        import gdown
+        # If offline, this system call won't crash the Streamlit app interface
+        try:
+            os.system("pip install gdown")
+            import gdown
+        except Exception:
+            return
 
     for lang, books in KNOWLEDGE_BASE.items():
         lang_dir = os.path.join(RAG_DIR, lang)
         os.makedirs(lang_dir, exist_ok=True)
         for filename, file_id in books.items():
             destination_path = os.path.join(lang_dir, filename)
+            
+            # Checks local disk first to avoid touching the network if file is present
             if not os.path.exists(destination_path):
-                with st.spinner(f"Downloading {filename} from cloud systems..."):
-                    try:
+                try:
+                    with st.spinner(f"Downloading {filename} from cloud systems..."):
                         gdown.download(id=file_id, output=destination_path, quiet=True)
-                    except Exception as e:
-                        st.error(f"Download exception caught for {filename}: {e}")
+                except Exception:
+                    pass
 
-# Run setup scans on launch to confirm file structures match configuration settings
-ensure_books_exist()
+# SAFETY NET FOR LINE 81: Wrap the call so the app starts smoothly even if completely offline
+try:
+    ensure_books_exist()
+except Exception:
+    pass
 
 def ensure_model_exists():
     """Checks for the Qwen GGUF model and auto-downloads it from Hugging Face if missing."""
