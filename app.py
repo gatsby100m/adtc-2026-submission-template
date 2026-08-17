@@ -218,7 +218,7 @@ if "current_book_name" not in st.session_state: st.session_state.current_book_na
 #=====================================================================
 def run_ai_advisory(user_input, lang):
     """Processes search arrays, retrieves reference pages cleanly, and enforces 0.0 deterministic bounds."""
-    cultural_closing = "\n\n*Allahu ya ba da amfanin gona mai albarka! Madalla da yin nagari!*" if lang == "Hausa" else "\n\n*Mayyourharvestbeheavyandrewarding!*"
+    cultural_closing = "\n\n*Allahu ya ba da amfanin gona mai albarka! Madalla da yin nagari!*" if lang == "Hausa" else "\n\n*May your harvest be heavy and rewarding!*"
     
     # 1. Establish strict guardrail system prompts
     if lang == "Hausa":
@@ -253,7 +253,7 @@ def run_ai_advisory(user_input, lang):
             best_match_idx = int(np.argmax(cos_scores))
             highest_score = cos_scores[best_match_idx]
             
-            # CRITICAL THRESHOLD: If the book does not match the query by at least 60%, reject it
+            # CRITICAL THRESHOLD: If the book does not match the query by at least 30%, reject it
             if highest_score >= 0.30:
                 matched_fact = active_db["chunks"][best_match_idx]
                 best_match_meta = active_db["metadata"][best_match_idx]
