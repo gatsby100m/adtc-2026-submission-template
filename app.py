@@ -518,20 +518,6 @@ with tab3:
             # Increment to reset the form text box value and clear state memory
             st.session_state.input_counter += 1
             st.rerun()
-                st.info(f"Automatically identified a sale! Logged +{amount:,.2f} Naira to Revenue.")
-            elif "labour" in text_lower or "lebur" in text_lower or "worker" in text_lower:
-                st.session_state.labour_cost += amount
-                st.info(f" Logged -{amount:,.2f} Naira to Labour Costs.")
-            elif "fertilizer" in text_lower or "taki" in text_lower or "chemical" in text_lower:
-                st.session_state.fertilizer_cost += amount
-                st.info(f" Logged -{amount:,.2f} Naira to Fertilizer Costs.")
-            elif "rent" in text_lower or "tractor" in text_lower or "kayan aiki" in text_lower:
-                st.session_state.equipment_cost += amount
-                st.info(f" Logged -{amount:,.2f} Naira to Equipment Costs.")
-            else:
-                st.session_state.other_expenses += amount
-                st.info(f" Categorized generic ledger transaction entry: -{amount:,.2f} Naira logged.")
-            st.rerun()
 
     st.markdown("---")
     col_in1, col_in2 = st.columns(2)
@@ -632,3 +618,8 @@ with tab3:
         )
     except Exception as download_error:
         st.info("Please fill in or save your ledger data above to enable downloading.")
+
+#load on first boot
+if TRANSFORMERS_AVAILABLE and encoder is not None:
+    _ = encoder.encode("pre_warm_offline_cache_string", show_progress_bar=False)
+
