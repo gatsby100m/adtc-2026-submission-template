@@ -411,7 +411,7 @@ def calculate_crop_timeline(crop, planting_date):
 def parse_financial_statement(statement_text):
     text_lower = statement_text.lower()
     numbers = [float(s) for s in re.findall(r'\d+', text_lower)]
-    amount = numbers if numbers else 0.0
+    amount = numbers[0] if numbers else 0.0
     
     if "sold" in text_lower or "sayar" in text_lower or "revenue" in text_lower:
         st.session_state.revenue += amount
