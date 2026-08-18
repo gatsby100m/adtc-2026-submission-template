@@ -62,14 +62,14 @@ def ensure_books_exist():
     try:
         import gdown
     except ImportError:
-        # Avoid running pip install if we know we are offline
+        # Pre-flight check: Only hit network if library is missing locally
         try:
             import urllib.request
             urllib.request.urlopen("https://google.com", timeout=3)
             os.system("pip install gdown")
             import gdown
         except Exception:
-            st.warning("⚠️ Offline and 'gdown' package is missing. Cannot download book assets.")
+            st.warning("Offline and 'gdown' package is missing. Cannot download book assets.")
             return
 
     for lang, books in KNOWLEDGE_BASE.items():
@@ -508,16 +508,20 @@ with tab3:
         key=f"nlp_stmt_{st.session_state.get('input_counter', 0)}"
     )
     if st.button(labels["log_btn"]):
-        if nlp_statement:
-            # Safely unpack the single number matrix directly from your custom parser
-            text_lower = nlp_statement.lower()
-            numbers = [float(s) for s in re.findall(r'\d+', text_lower)]
-            amount = numbers[0] if numbers else 0.0
-            
+    if nlp_statement:
+        text_lower = nlp_statement.lower()
+        numbers = [float(s) for s in re.findall(r'\d+', text_lower)]
+        
+        # FIX: Guard against empty lists to eliminate IndexError crashes
+        amount = numbers[0] if len(numbers) > 0 else 0.0
+        
+        if amount == 0.0:
+            st.warning("Please include a valid amount/number in your transaction details.")
+        else:
             # Context transaction classification layout engine routing rules
             if "sold" in text_lower or "sayar" in text_lower or "revenue" in text_lower:
                 st.session_state.revenue += amount
-                st.info(f" Automatically identified a sale! Logged +{amount:,.2f} Naira to Revenue.")
+                st.info(f"Automatically identified a sale! Logged +{amount:,.2f} Naira to Revenue.")
             elif "labour" in text_lower or "lebur" in text_lower or "worker" in text_lower:
                 st.session_state.labour_cost += amount
                 st.info(f" Logged -{amount:,.2f} Naira to Labour Costs.")
