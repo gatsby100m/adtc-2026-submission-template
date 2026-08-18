@@ -620,15 +620,6 @@ with tab3:
         st.info("Please fill in or save your ledger data above to enable downloading.")
 
 #load on first boot
-if TRANSFORMERS_AVAILABLE:
-    try:
-        import os
-        # 1. Blocks tracking and force local file lookup immediately
-        os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
-        os.environ["TRANSFORMERS_OFFLINE"] = "1"
-        os.environ["HF_HUB_OFFLINE"] = "1"
-        
-        # Fixed the cut-off name below:
-        loaded_encoder = SentenceTransformer("all-MiniLM-L6-v2")
-    except Exception:
-        pass
+if TRANSFORMERS_AVAILABLE and encoder is not None:
+    _ = encoder.encode("pre_warm_offline_cache_string", show_progress_bar=False)
+
