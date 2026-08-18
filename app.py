@@ -275,17 +275,19 @@ def run_ai_advisory(user_input, lang):
                 st.session_state.current_page_num = best_match_meta["page_num"]
                 st.session_state.current_book_name = best_match_meta["file_name"]
                 
-                if PDF_LIBS_AVAILABLE:
-                    images = convert_from_path(
-                        best_match_meta["file_path"],
-                        first_page=best_match_meta["page_num"],
-                        last_page=best_match_meta["page_num"]
-                    )
-                    if images:
-                        img_path = os.path.join(CACHE_DIR, f"rendered_page_{lang.lower()}.png")
-                        # FIX: convert_from_path returns a list; access index 0 to save the image
-                        images[0].save(img_path, "PNG")
-                        st.session_state.current_page_img = img_path
+        if PDF_LIBS_AVAILABLE:
+            try:
+                images = convert_from_path(
+                    best_match_meta["file_path"],
+                    first_page=best_match_meta["page_num"],
+                    last_page=best_match_meta["page_num"]
+                )
+                if images:
+                    img_path = os.path.join(CACHE_DIR, f"rendered_page_{lang.lower()}.png")
+                    images[0].save(img_path, "PNG")
+                    st.session_state.current_page_img = img_path
+            except Exception as img_err:
+                st.error(f"Visual page rendering failed: {img_err}")
             else:
                 # Force fallback if similarity score is too low
                 return f"{fallback_msg}{cultural_closing}"
@@ -507,20 +509,15 @@ with tab3:
         labels["ledger_input"],
         key=f"nlp_stmt_{st.session_state.get('input_counter', 0)}"
     )
-    if st.button(labels["log_btn"]):
-    if nlp_statement:
-        text_lower = nlp_statement.lower()
-        numbers = [float(s) for s in re.findall(r'\d+', text_lower)]
-        
-        # FIX: Guard against empty lists to eliminate IndexError crashes
-        amount = numbers[0] if len(numbers) > 0 else 0.0
-        
-        if amount == 0.0:
-            st.warning("Please include a valid amount/number in your transaction details.")
-        else:
-            # Context transaction classification layout engine routing rules
-            if "sold" in text_lower or "sayar" in text_lower or "revenue" in text_lower:
-                st.session_state.revenue += amount
+        if st.button(labels["log_btn"]):
+        if nlp_statement.strip():
+            # Call your central parsing function directly
+            feedback = parse_financial_statement(nlp_statement)
+            st.info(feedback)
+            
+            # Increment to reset the form text box value and clear state memory
+            st.session_state.input_counter += 1
+            st.rerun()
                 st.info(f"Automatically identified a sale! Logged +{amount:,.2f} Naira to Revenue.")
             elif "labour" in text_lower or "lebur" in text_lower or "worker" in text_lower:
                 st.session_state.labour_cost += amount
