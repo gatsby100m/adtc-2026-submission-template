@@ -58,56 +58,62 @@ KNOWLEDGE_BASE = {
     }
 }
 def ensure_books_exist():
-    """Validates local directories and downloads missing core textbooks dynamically via gdown."""
+    """Validates local directories and safely handles missing textbooks when offline."""
     try:
         import gdown
     except ImportError:
-        # If offline, this system call won't crash the Streamlit app interface
+        # Avoid running pip install if we know we are offline
         try:
+            import urllib.request
+            urllib.request.urlopen("https://google.com", timeout=3)
             os.system("pip install gdown")
             import gdown
         except Exception:
+            st.warning("⚠️ Offline and 'gdown' package is missing. Cannot download book assets.")
             return
 
     for lang, books in KNOWLEDGE_BASE.items():
         lang_dir = os.path.join(RAG_DIR, lang)
         os.makedirs(lang_dir, exist_ok=True)
+        
         for filename, file_id in books.items():
             destination_path = os.path.join(lang_dir, filename)
             
-            # Checks local disk first to avoid touching the network if file is present
+            # Correct local disk check (Skips network if present)
             if not os.path.exists(destination_path):
                 try:
                     with st.spinner(f"Downloading {filename} from cloud systems..."):
                         gdown.download(id=file_id, output=destination_path, quiet=True)
                 except Exception:
+                    st.error(f"Could not retrieve {filename}. Working in limited offline mode.")
                     pass
 
-# SAFETY NET FOR LINE 81: Wrap the call so the app starts smoothly even if completely offline
-try:
-    ensure_books_exist()
-except Exception:
-    pass
-
 def ensure_model_exists():
-    """Checks for the Qwen GGUF model and auto-downloads it from Hugging Face if missing."""
+    """Checks for the Qwen GGUF model and handles internet dropouts gracefully."""
     if not os.path.exists(MODEL_PATH):
-        hf_url = f"https://huggingface.co"
-        st.info(" GGUF Model file not found. Starting automatic download from Hugging Face (~382MB)...")
-        progress_bar = st.progress(0)
-        status_text = st.empty()
+        hf_url = f"https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf?download=true" # Note: Ensure this is updated to a direct file download link
+        st.info("GGUF Model file not found. Attempting automatic download from Hugging Face...")
+        
         try:
             import urllib.request
+            # Pre-flight check: Test if internet is reachable before initializing downloads
+            urllib.request.urlopen("https://huggingface.co", timeout=3)
+            
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
             def download_progress(count, block_size, total_size):
                 percent = min(int(count * block_size * 100 / total_size), 100)
                 progress_bar.progress(percent / 100)
                 status_text.text(f"Downloading model: {percent}% complete")
+                
             urllib.request.urlretrieve(hf_url, MODEL_PATH, reporthook=download_progress)
-            st.success(" Model downloaded successfully! Initializing LLM engine...")
+            st.success("Model downloaded successfully! Initializing LLM engine...")
             status_text.empty()
             progress_bar.empty()
+            
         except Exception as e:
-            st.error(f" Failed to download model from Hugging Face: {e}")
+            st.error("⚠️ Local GGUF Model is missing and internet is unavailable. Please download the weights manually.")
 
 # Trigger the model downloader alongside your book checks
 ensure_model_exists()
