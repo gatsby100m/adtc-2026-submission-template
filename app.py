@@ -291,11 +291,6 @@ def run_ai_advisory(user_input, lang):
             else:
                 # Force fallback if similarity score is too low
                 return f"{fallback_msg}{cultural_closing}"
-        except Exception as e:
-            st.error(f"Error rendering PDF page image: {e}")
-    # Fallback to structural message if the database is dry or empty
-    if not matched_fact.strip():
-        return f"{fallback_msg}{cultural_closing}"
         
     # STRATEGIC FORCED ROUTING: Use raw text match for Hausa, require LLM for English
     if lang == "Hausa":
