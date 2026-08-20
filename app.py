@@ -282,15 +282,21 @@ def run_ai_advisory(user_input, lang):
                     first_page=best_match_meta["page_num"],
                     last_page=best_match_meta["page_num"]
                 )
+                
                 if images:
                     img_path = os.path.join(CACHE_DIR, f"rendered_page_{lang.lower()}.png")
+                    # FIX: convert_from_path returns a list; access index 0 to save the image
                     images[0].save(img_path, "PNG")
                     st.session_state.current_page_img = img_path
-            except Exception as img_err:
-                st.error(f"Visual page rendering failed: {img_err}")
-            else:
-                # Force fallback if similarity score is too low
-                return f"{fallback_msg}{cultural_closing}"
+                else:
+                    # Force fallback if similarity score is too low
+                    return f"{fallback_msg}{cultural_closing}"
+            except Exception as e:
+                st.error(f"Error rendering PDF page image: {e}")
+
+    # Fallback to structural message if the database is dry or empty
+    if not matched_fact.strip():
+        return f"{fallback_msg}{cultural_closing}"
         
     # STRATEGIC FORCED ROUTING: Use raw text match for Hausa, require LLM for English
     if lang == "Hausa":
