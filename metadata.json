@@ -17,11 +17,11 @@
   "test_prompts": [
     {
       "prompt_id": "tp_001",
-      "prompt": "brown spots on leaves?"
+      "prompt": "tomato foliage blighting brown patches"
     },
     {
       "prompt_id": "tp_002",
-      "prompt": "Kwatanta alamomin cutar taba ganyen masara (CMD) kuma wane mataki ya kamata a dauka idan ta fito?"
+      "prompt": "cutar tomatir"
     }
   ],
   "model": {
