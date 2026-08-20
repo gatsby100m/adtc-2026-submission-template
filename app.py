@@ -59,56 +59,54 @@ KNOWLEDGE_BASE = {
         "Concise-Encyclopedia-of-Plant-Diseases_ha.pdf": "1cJgi9eGnx35CEMFziMoE8nyEKmfHoWxi"
     }
 }
+
 def ensure_books_exist():
     """Validates local directories and downloads missing core textbooks dynamically via gdown."""
     try:
         import gdown
     except ImportError:
-        # If offline, this system call won't crash the Streamlit app interface
-        try:
-            os.system("pip install gdown")
-            import gdown
-        except Exception:
-            return
+        os.system("pip install gdown")
+        import gdown
 
     for lang, books in KNOWLEDGE_BASE.items():
         lang_dir = os.path.join(RAG_DIR, lang)
         os.makedirs(lang_dir, exist_ok=True)
+        
         for filename, file_id in books.items():
             destination_path = os.path.join(lang_dir, filename)
-            # Checks local disk first to avoid touching the network if file is present
+            
             if not os.path.exists(destination_path):
-                try:
-                    with st.spinner(f"Downloading {filename} from cloud systems..."):
+                with st.spinner(f"Downloading {filename} from cloud systems..."):
+                    try:
                         gdown.download(id=file_id, output=destination_path, quiet=True)
-                except Exception:
-                    pass
+                    except Exception as e:
+                        st.error(f"Download exception caught for {filename}: {e}")
 
-# SAFETY NET FOR LINE 81: Wrap the call so the app starts smoothly even if completely offline
-try:
-    ensure_books_exist()
-except Exception:
-    pass
+# Run setup scans on launch to confirm file structures match configuration settings
+ensure_books_exist()
 
 def ensure_model_exists():
     """Checks for the Qwen GGUF model and auto-downloads it from Hugging Face if missing."""
     if not os.path.exists(MODEL_PATH):
         hf_url = f"https://huggingface.co"
-        st.info(" GGUF Model file not found. Starting automatic download from Hugging Face (~382MB)...")
+        st.info("GGUF Model file not found. Starting automatic download from Hugging Face (~382MB)...")
         progress_bar = st.progress(0)
         status_text = st.empty()
+        
         try:
             import urllib.request
+            
             def download_progress(count, block_size, total_size):
                 percent = min(int(count * block_size * 100 / total_size), 100)
                 progress_bar.progress(percent / 100)
                 status_text.text(f"Downloading model: {percent}% complete")
+                
             urllib.request.urlretrieve(hf_url, MODEL_PATH, reporthook=download_progress)
             st.success("Model downloaded successfully! Initializing LLM engine...")
             status_text.empty()
             progress_bar.empty()
         except Exception as e:
-            st.error(f"Failed to download model from Hugging Face: {e}")
+            st.error(f" Failed to download model from Hugging Face: {e}")
 
 # Trigger the model downloader alongside your book checks
 ensure_model_exists()
@@ -121,20 +119,22 @@ def load_ai_models():
     """Safely instantiates embedding models and local quantized LLM cores in global space."""
     loaded_encoder = None
     loaded_llm = None
+    
     if TRANSFORMERS_AVAILABLE:
         try:
             loaded_encoder = SentenceTransformer("all-MiniLM-L6-v2")
         except Exception:
             pass
+            
     if LLAMA_AVAILABLE and os.path.exists(MODEL_PATH):
         try:
             loaded_llm = Llama(model_path=MODEL_PATH, n_ctx=2048, verbose=False)
         except Exception:
             pass
+            
     return loaded_encoder, loaded_llm
 
 encoder, llm = load_ai_models()
-
 #=========================================================================
 # MULTILINGUAL DOCUMENT SEGMENTATION AND VECTOR SCHEMAS
 #=========================================================================
@@ -144,9 +144,11 @@ def index_english_library():
     fallback = {"chunks": [], "metadata": [], "embeddings": None}
     if not TRANSFORMERS_AVAILABLE or not PDF_LIBS_AVAILABLE or encoder is None:
         return fallback
+        
     english_dir = os.path.join(RAG_DIR, "english")
     if not os.path.exists(english_dir):
         return fallback
+        
     chunks, metadata = [], []
     for filename in os.listdir(english_dir):
         if filename.endswith(".pdf"):
@@ -160,6 +162,7 @@ def index_english_library():
                         metadata.append({"file_name": filename, "file_path": file_path, "page_num": idx + 1})
             except Exception:
                 continue
+                
     if chunks:
         try:
             embeddings = encoder.encode(chunks, convert_to_tensor=True, show_progress_bar=False)
@@ -174,9 +177,11 @@ def index_hausa_library():
     fallback = {"chunks": [], "metadata": [], "embeddings": None}
     if not TRANSFORMERS_AVAILABLE or not PDF_LIBS_AVAILABLE or encoder is None:
         return fallback
+        
     hausa_dir = os.path.join(RAG_DIR, "hausa")
     if not os.path.exists(hausa_dir):
         return fallback
+        
     chunks, metadata = [], []
     for filename in os.listdir(hausa_dir):
         if filename.endswith(".pdf"):
@@ -190,6 +195,7 @@ def index_hausa_library():
                         metadata.append({"file_name": filename, "file_path": file_path, "page_num": idx + 1})
             except Exception:
                 continue
+                
     if chunks:
         try:
             embeddings = encoder.encode(chunks, convert_to_tensor=True, show_progress_bar=False)
@@ -206,10 +212,11 @@ hausa_db = index_hausa_library()
 db_chunks = english_db["chunks"]
 db_metadata = english_db["metadata"]
 db_embeddings = english_db["embeddings"]
+
 CULTURAL_PROVERBS = [
     "Yoruba: Bí ẹniyàn bá șegbingbin, béèni yóò șekórè. (As we sow, so shall we reap.)",
-    "Hausa: Mai Hakuri yukan dafa dutse har ya sha romonsa. (The patient farmer cooks a stone and drinks its soup.)",
-    "Swahili: Mvumilivuh kula mbivu. (A patient person eats ripe fruit.)",
+    "Hausa: Mai hakuri yukan dafa dutse har ya sha romonsa. (The patient farmer cooks a stone and drinks its soup.)",
+    "Swahili: Mvumilivu hula mbivu. (A patient person eats ripe fruit.)",
     "Igbo: Onye gbambo na ubi, owuwe ihe ubi ga-asacha anya mmiri ya. (He who labors in the field will have his tears wiped by the harvest.)"
 ]
 
@@ -229,7 +236,7 @@ if "current_book_name" not in st.session_state: st.session_state.current_book_na
 #=====================================================================
 def run_ai_advisory(user_input, lang):
     """Processes search arrays, retrieves reference pages cleanly, and enforces 0.0 deterministic bounds."""
-    cultural_closing = "\n\n*Allahu ya bada amfanin gona mai albarka! Madalla da yin nagari!*" if lang == "Hausa" else "\n\n*May your harvest be heavy and rewarding!*"
+    cultural_closing = "\n\n*Allah ya ba da amfanin gona mai albarka! Madalla da yin nagari!*" if lang == "Hausa" else "\n\n*May your harvest be heavy and rewarding!*"
     
     # 1. Establish strict guardrail system prompts
     if lang == "Hausa":
@@ -237,7 +244,7 @@ def run_ai_advisory(user_input, lang):
         fallback_msg = "Ba a sami alamun cutar a cikin littafin gona ba. Don Allah a sake duba alamun."
         system_instruction = (
             "Kai babban masanin shawarwari na aikin gona ne na Afirka.\n"
-            "HAKKI: Ordered to use information from 'Bayani Daga Littafi' ONLY to answer the question.\n"
+            "HAKKI: Dole ne ka yi amfani da bayanan 'Bayani Daga Littafi' KAWAI don amsa tambayar."
             "Idan bayanan ba su ƙunshi amsar ba, dan na rubuta: 'Symptom ba a samu a cikin littafin gona ba.'\n"
             "GARGADI: Kada ka yi amfani da sanin kanka na ciki. Rubuta amsarka cikin Harshen Hausa kawai."
         )
@@ -247,15 +254,14 @@ def run_ai_advisory(user_input, lang):
         fallback_msg = "Symptom not found in the local textbook manual. Please try rephrasing."
         system_instruction = (
             "You are a strict, offline African agricultural text reader.\n"
-            "CRITICAL ORDER: Answer the user's question using ONLY the provided 'FactsheetContext' below.\n"
-            "If the context does not explicitly mention or resolve the issue, your final answer MUST be exactly:\n"
+            "CRITICAL ORDER: Answer the user's question using ONLY the provided 'FactsheetContext' below."
+            "If the context does not explicitly mention or resolve the issue, your final answer MUST be exactly:"
             "'Symptom not found in the local textbook manual.'\n"
             "Do NOT use external pre-trained knowledge, do NOT extrapolate, and do NOT create fake citations."
         )
         context_label = "FactsheetContext"
-
+        
     matched_fact = ""
-
     # 2. Vector Search Retrieval with a strict Similarity Score Threshold
     if encoder is not None and active_db["embeddings"] is not None and len(active_db["chunks"]) > 0:
         try:
@@ -287,7 +293,7 @@ def run_ai_advisory(user_input, lang):
                 return f"{fallback_msg}{cultural_closing}"
         except Exception as e:
             st.error(f"Error rendering PDF page image: {e}")
-
+            
     # Fallback to structural message if the database is dry or empty
     if not matched_fact.strip():
         return f"{fallback_msg}{cultural_closing}"
@@ -314,24 +320,23 @@ def run_ai_advisory(user_input, lang):
         response = llm(
             prompt,
             max_tokens=200,
-            temperature=0.0,  # Strict accuracy lock
+            temperature=0.0, # Strict accuracy lock
             top_p=1.0,
             repeat_penalty=1.1,
             stop=["<|im_end|>", "<|im_start|>", "User:", "System:"]
         )
-        
         ai_response = response['choices']['text'].strip()
-        ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response)  # Cleanup formatting artifacts
+        ai_response = re.sub(r'[\u4e00-\u9fff]+', '', ai_response) # Cleanup formatting artifacts
         
         if len(ai_response) <= 3:
             ai_response = f"Farming Truth Block: {matched_fact}"
             
         return f"{ai_response}{cultural_closing}"
-        
     except Exception:
         # If the LLM engine fails or runs out of memory, safely output the raw textbook text
         prefix = "**Offline Semantic Match:**\n\n"
         return f"{prefix}{matched_fact}{cultural_closing}"
+
 #=====================================================================
 # DICTIONARY TRANSLATION DICTIONARY (Fixed Missing Tab Elements)
 #=====================================================================
@@ -408,7 +413,6 @@ def parse_financial_statement(statement_text):
     text_lower = statement_text.lower()
     numbers = [float(s) for s in re.findall(r'\d+', text_lower)]
     amount = numbers if numbers else 0.0
-    
     if "sold" in text_lower or "sayar" in text_lower or "revenue" in text_lower:
         st.session_state.revenue += amount
         return f"Automatically identified a sale! Logged +{amount:,.2f} Naira to Revenue."
@@ -449,7 +453,7 @@ with tab1:
             
         if uploaded_audio is not None and user_audio is None:
             user_audio = uploaded_audio
-
+            
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
             if st.button(labels["submit_btn"], type="primary", key="main_diagnostic_trigger"):
@@ -465,13 +469,13 @@ with tab1:
                 st.session_state.current_book_name = None
                 st.session_state.last_ai_response = None
                 st.rerun()
-
+                
         # Render the text response inside the chat column
         if st.session_state.get("last_ai_response"):
             st.markdown("---")
             st.subheader("Advisor Response" if selected_lang == "English" else "Shafar Shawarwari")
             st.write(st.session_state.last_ai_response)
-
+            
     # --- COLUMN 2: ENCYCLOPEDIA REFERENCE VIEWER ---
     with col_viewer:
         st.subheader("Encyclopedia Reference Viewer" if selected_lang == "English" else "Shafar Karatun Littafi")
@@ -489,7 +493,7 @@ with tab1:
             default_info = (
                 "When you search for crop symptoms, the authentic visual textbook page matching your diagnosis will render here instantly completely offline."
             ) if selected_lang == "English" else (
-                "Lokacin da kace bincika alamun cututtuka, shafin littafi gaskiyan agaske wanda ya dace da gano ku zai fito anan take ba tare da intanet ba."
+                "Lokacin da kace bincika alamun cututtuka, shafin littafi gaskiyan a gaske wanda ya dace da gano ku zai fito anan take ba tare da intanet ba."
             )
             st.info(default_info)
 
@@ -523,3 +527,113 @@ with tab3:
                 st.session_state.labour_cost += amount
                 st.info(f"Logged -{amount:,.2f} Naira to Labour Costs.")
             elif "fertilizer" in text_lower or "taki" in text_lower or "chemical" in text_lower:
+                st.session_state.fertilizer_cost += amount
+                st.info(f"Logged -{amount:,.2f} Naira to Fertilizer Costs.")
+            elif "rent" in text_lower or "tractor" in text_lower or "kayan aiki" in text_lower:
+                st.session_state.equipment_cost += amount
+                st.info(f"Logged -{amount:,.2f} Naira to Equipment Costs.")
+            else:
+                st.session_state.other_expenses += amount
+                st.info(f"Categorized generic ledger transaction entry: -{amount:,.2f} Naira logged.")
+            st.rerun()
+
+    st.markdown("---")
+    col_in1, col_in2 = st.columns(2)
+    with col_in1:
+        sale_input = st.number_input("Crop Sales Revenue (Naira):", min_value=0.0, step=500.0, key="sale_in")
+        if st.button("Add to Sales / Kara Kudin Sayarwa"):
+            st.session_state.revenue += sale_input
+            st.success(f"Added +{sale_input:,.2f} Naira to Sales!")
+            st.rerun()
+            
+        labour_input = st.number_input("Labour & Worker Cost (Naira):", min_value=0.0, step=500.0, key="labour_in")
+        if st.button("Add to Labour / Kara Kudin Lebur"):
+            st.session_state.labour_cost += labour_input
+            st.success(f"Added -{labour_input:,.2f} Naira to Labour!")
+            st.rerun()
+            
+    with col_in2:
+        fert_input = st.number_input("Fertilizer & Chemicals Cost (Naira):", min_value=0.0, step=500.0, key="fert_in")
+        if st.button("Add to Fertilizer / Kara Kudin Taki"):
+            st.session_state.fertilizer_cost += fert_input
+            st.success(f"Added -{fert_input:,.2f} Naira to Fertilizer!")
+            st.rerun()
+            
+        equip_input = st.number_input("Equipment & Tractor Rental (Naira):", min_value=0.0, step=500.0, key="equip_in")
+        if st.button("Add to Equipment / Kara Kudin Kayan Aiki"):
+            st.session_state.equipment_cost += equip_input
+            st.success(f"Added -{equip_input:,.2f} Naira to Equipment!")
+            st.rerun()
+
+    st.markdown("---")
+    st.markdown("### Farm Profit & Loss Summary / Bayanin Riba da Asara")
+    
+    total_costs = (
+        st.session_state.labour_cost +
+        st.session_state.fertilizer_cost +
+        st.session_state.equipment_cost +
+        st.session_state.other_expenses
+    )
+    net_profit = st.session_state.revenue - total_costs
+    
+    st.metric("Total Sales Revenue / Kudin Sayarwa (+)", f"{st.session_state.revenue:,.2f} Naira")
+    
+    col_metrics1, col_metrics2 = st.columns(2)
+    with col_metrics1:
+        st.metric("Labour Costs / Kudin Lebur (-)", f"{st.session_state.labour_cost:,.2f} Naira")
+        st.metric("Fertilizer & Chemicals / Kudin Taki (-)", f"{st.session_state.fertilizer_cost:,.2f} Naira")
+    with col_metrics2:
+        st.metric("Equipment & Tractor / Kayan Aiki (-)", f"{st.session_state.equipment_cost:,.2f} Naira")
+        st.metric("Other Expenses / Kudaden Fitarwa (-)", f"{st.session_state.other_expenses:,.2f} Naira")
+
+    st.markdown("---")
+    if net_profit >= 0:
+        st.success(f"**Net Profit / Riba Ta Tabbata:** {net_profit:,.2f} Naira")
+    else:
+        st.error(f"**Net Operating Loss / Asara Ta Fito:** {abs(net_profit):,.2f} Naira")
+        
+    if st.button("Reset Ledger / Goge Dukan Bayanan Kudi", type="secondary"):
+        st.session_state.revenue = 0.0
+        st.session_state.labour_cost = 0.0
+        st.session_state.fertilizer_cost = 0.0
+        st.session_state.equipment_cost = 0.0
+        st.session_state.other_expenses = 0.0
+        st.success("Ledger cleared successfully!")
+        st.rerun()
+
+    st.subheader("Save Records Locally")
+    current_ledger_data = {
+        "Revenue": [st.session_state.get('revenue', 0.0)],
+        "LabourCost": [st.session_state.get('labour_cost', 0.0)],
+        "FertilizerCost": [st.session_state.get('fertilizer_cost', 0.0)],
+        "EquipmentCost": [st.session_state.get('equipment_cost', 0.0)],
+        "OtherExpenses": [st.session_state.get('other_expenses', 0.0)]
+    }
+    
+    if st.button("Save Ledger to Laptop", key="save_ledger_tab3_btn"):
+        try:
+            import pandas as pd
+            df = pd.DataFrame(current_ledger_data)
+            file_name = "ledger_backup.csv"
+            df.to_csv(file_name, index=False)
+            absolute_path = os.path.abspath(file_name)
+            st.success(f"Saved successfully to your laptop at:\n`{absolute_path}`")
+        except Exception as e:
+            st.error(f"Failed to save: {e}")
+
+    st.markdown("---")
+    st.subheader("Download Ledger File")
+    st.write("Download the current ledger data directly through your web browser.")
+    try:
+        import pandas as pd
+        df = pd.DataFrame(current_ledger_data)
+        csv_data = df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="⬇ Download Ledger as CSV",
+            data=csv_data,
+            file_name="ledger_download.csv",
+            mime="text/csv",
+            key="download_ledger_tab3_btn"
+        )
+    except Exception as download_error:
+        st.info("Please fill in or save your ledger data above to enable downloading.")
