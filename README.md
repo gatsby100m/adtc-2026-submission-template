@@ -3,27 +3,13 @@
 
 An end-to-end, **100% offline, on-device AI assistant** designed explicitly for resource-constrained environments in Africa. Built for the Africa Deep Tech Challenge (ADTC) 2026, this application runs entirely on a laptop CPU without internet dependencies, cloud APIs, or data bundles. 
 
-By combining an ultra-lightweight **0.5B Parameter Qwen1.5 LLM** with an on-device semantic search engine, it provides critical agricultural triage, automated financial tracking, and cultural connection features—fully accessible in both **English and Hausa**.
+By combining an ultra-lightweight **0.5B Parameter Qwen2.5 LLM** with an on-device semantic search engine, it provides critical agricultural triage, automated financial tracking, and cultural connection features—fully accessible in both **English and Hausa**.
 
 ---
 
 ## 🚀 How to Run the App (One-Click Setup)
 
-This project is fully automated and optimized to build correctly on local development machines, including low-RAM hardware down to 4GB.
-
-### For Windows Judges:
-1. Clone this repository and open the project folder.
-2. Double-click the `run_win.bat` file. This will automatically create an isolated environment, configure your dependencies, download the 0.5B model, and launch the application interface.
-
-### For Mac & Linux Judges:
-1. Clone this repository and open your terminal inside the project folder.
-2. Make the script executable and run it:
-   ```bash
-   chmod +x run_mac_linux.sh
-   ./run_mac_linux.sh
-   ```
-
----
+This project is fully automated and optimized to build correctly on local development machines, including low-RAM hardware of 6gb
 
 ## 🚀 Key Features
 
